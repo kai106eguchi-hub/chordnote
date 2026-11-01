@@ -1351,7 +1351,8 @@ async function saveBackup(){
 }
 async function loadBackup(file){
   let data;
-  try{data=JSON.parse(await file.text());}catch(e){toast("ファイルを読めませんでした。バックアップのJSONファイルを選んでください",false);return;}
+  const readText=(f)=>f.text?f.text():new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsText(f);});
+  try{data=JSON.parse(await readText(file));}catch(e){toast("ファイルを読めませんでした。バックアップのJSONファイルを選んでください",false);return;}
   if(!data||data.app!=="chordnote"||!Array.isArray(data.songs)){toast("コード進行ノートのバックアップではないようです",false);return;}
   if(!canWrite){toast("このページでは読み込みできません（閲覧のみ）",false);return;}
   let ns=0,nc=0;
