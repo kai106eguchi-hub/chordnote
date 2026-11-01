@@ -1,0 +1,1385 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="ギターのコード進行を曲・セクション・小節ごとに記録し、コード図・度数・移調で確認できるノート。">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>コード進行ノート</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: chart-paper workbench. Song shelf on the left, a lead-sheet style chart on the right with rehearsal-mark boxes and bar lines. */
+:root{
+  --bg:#ECEFF2; --paper:#FAFBFC; --ink:#1B2430; --muted:#5E6A78; --line:#C9D0D8; --accent:#A8561A; --accent-soft:#F3E3D3; --ok:#2F7A4F;
+  --f-chord:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161B; --paper:#1A2028; --ink:#E4E8ED; --muted:#93A0AE; --line:#323C48; --accent:#E59A55; --accent-soft:#3A2A1C; --ok:#6CC08F; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161B; --paper:#1A2028; --ink:#E4E8ED; --muted:#93A0AE; --line:#323C48; --accent:#E59A55; --accent-soft:#3A2A1C; --ok:#6CC08F; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.6}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100%;
+  padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+.shelf{border-right:1px solid var(--line);padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.brand{font-family:var(--f-chord);font-weight:700;font-size:26px;letter-spacing:.02em;line-height:1}
+.brand small{display:block;font-family:var(--f-body);font-weight:500;font-size:11px;color:var(--muted);letter-spacing:.08em;margin-top:6px}
+.search{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:7px 12px;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--paper)}
+.btn.small{padding:4px 9px;font-size:12px}
+.btn.danger{color:#B4361F}
+.list{display:flex;flex-direction:column;gap:2px;overflow:auto;min-height:0}
+.item{display:flex;justify-content:space-between;align-items:baseline;gap:8px;text-align:left;border:0;background:none;padding:8px 10px;border-radius:6px;width:100%}
+.item:hover{background:var(--paper)}
+.item.on{background:var(--paper);box-shadow:inset 3px 0 0 var(--accent)}
+.item .t{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .a{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.item .k{font-family:var(--f-mono);font-size:12px;color:var(--accent);flex:none}
+.note{font-size:12px;color:var(--muted)}
+
+.main{padding-block:24px 48px;padding-left:24px;padding-right:max(24px,env(safe-area-inset-right,0px));min-width:0}
+.sheet{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.toolbar .grp{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--paper)}
+.seg button{border:0;background:none;padding:6px 12px;font-weight:500}
+.seg button.on{background:var(--ink);color:var(--paper)}
+.tp{display:inline-flex;align-items:center;gap:4px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.tp output{min-width:2.6em;text-align:center;color:var(--ink)}
+
+.head h1{font-family:var(--f-chord);font-weight:700;font-size:44px;line-height:1.05;margin:0;text-wrap:balance;letter-spacing:.01em}
+.head .artist{color:var(--muted);margin-top:4px}
+.meta{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px;font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+.meta .orig{color:var(--accent)}
+
+.paper{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:22px 22px 26px}
+.sec{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:start}
+.sec+.sec{margin-top:36px}
+.mark{display:flex;flex-direction:column;align-items:center;gap:4px}
+.mark .box{width:32px;height:32px;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--f-chord);font-weight:700;font-size:20px}
+.mark .nm{font-size:11px;color:var(--muted);text-align:center;line-height:1.3;word-break:break-all}
+.bars{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));row-gap:16px}
+.bar{min-width:0;border-left:2px solid var(--ink);padding:10px 12px;min-height:78px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);column-gap:10px;align-items:start;border-bottom:1px solid var(--line)}
+.bar:nth-child(4n),.bar:last-child{border-right:2px solid var(--ink)}
+.bar>.ch{min-width:0}
+.lines{display:flex;flex-direction:column;gap:16px;min-width:0}
+
+.lines>.bars:last-child>.bar:last-child{border-right:4px double var(--ink)}
+.bar.d3 .ch .n{font-size:22px}
+.bar.d5 .ch .n{font-size:18px}
+.bar.d3{column-gap:8px}
+
+.ch{display:flex;flex-direction:column;min-width:0}
+.ch .n{font-family:var(--f-chord);font-weight:600;font-size:26px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.ch .n sup{font-size:.6em;font-weight:500;vertical-align:.55em;margin-left:1px}
+.ch .n .bass{font-weight:500;color:var(--muted)}
+.ch .r{font-family:var(--f-mono);font-size:11px;color:var(--accent);line-height:1.2}
+.ch.rep .n{color:var(--muted)}
+.ch.same .n{color:var(--muted);font-weight:500;font-size:30px;transform:skewX(-8deg);padding:0 4px;opacity:.7}
+.ch .cd{display:block;margin-top:4px;margin-left:-6px}
+.ch .cd svg{display:block;width:100%;max-width:59px;height:auto}
+.empty-sec{color:var(--muted);font-size:13px;padding:10px 0}
+
+.diagrams h2,.memo h2,.pal h2{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:700;margin:0 0 10px}
+.dgrid{display:flex;flex-wrap:wrap;gap:14px 10px}
+.dg{display:flex;flex-direction:column;align-items:center;width:92px}
+.dg .nm{font-family:var(--f-chord);font-weight:600;font-size:20px;line-height:1}
+.dg .ap{font-size:10px;color:var(--muted);height:14px}
+.dg svg{display:block}
+.memo p{white-space:pre-wrap;margin:0;max-width:65ch}
+
+/* editor */
+.ed{display:flex;flex-direction:column;gap:16px}
+.fields{display:grid;grid-template-columns:2fr 1.4fr repeat(4,minmax(70px,.6fr));gap:10px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f label{font-size:11px;color:var(--muted);letter-spacing:.06em;font-weight:500}
+.f input,.f select,.f textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+.f textarea{min-height:72px;resize:vertical}
+.esec{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.esec .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.esec .row input.name{flex:1 1 140px;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-weight:700}
+.esec textarea.bars-in{width:100%;min-height:58px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-family:var(--f-mono);font-size:14px;resize:vertical}
+.esec.focus{border-color:var(--accent)}
+.preview .bars{row-gap:8px}
+.preview .ch .n{font-size:20px}
+.preview .bar{min-height:44px;padding:6px 8px;column-gap:10px}
+.preview .bars{row-gap:8px}
+.preview .lines{gap:8px}
+.preview .bar.d3 .ch .n,.preview .bar.d5 .ch .n{font-size:16px}
+.hint{font-size:12px;color:var(--muted)}
+.hint code{font-family:var(--f-mono);background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+.pal{position:sticky;bottom:0;background:var(--bg);padding-block:10px;border-top:1px solid var(--line);z-index:2}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--paper);border-radius:5px;padding:3px 9px;display:flex;flex-direction:column;align-items:center;line-height:1.1}
+.chip b{font-family:var(--f-chord);font-weight:600;font-size:18px}
+.chip i{font-style:normal;font-family:var(--f-mono);font-size:10px;color:var(--accent)}
+.chip:hover{border-color:var(--accent)}
+.status{font-size:12px;color:var(--muted);font-family:var(--f-mono)}
+.status.ok{color:var(--ok)}
+.welcome{max-width:520px;margin:12vh auto 0;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
+.welcome h1{font-family:var(--f-chord);font-size:36px;margin:0}
+.copybox{width:100%;min-height:160px;font-family:var(--f-mono);font-size:12px;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
+.menu-btn{display:none}
+
+/* shelf tabs */
+.tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--paper)}
+.tabs button{border:0;background:none;padding:7px 0;font-weight:500}
+.tabs button.on{background:var(--ink);color:var(--paper)}
+.item .frets{font-family:var(--f-mono);font-size:12px;color:var(--accent);flex:none;letter-spacing:.08em}
+
+/* diagram extras */
+.dg .tag{font-size:10px;font-weight:700;color:var(--paper);background:var(--accent);border-radius:3px;padding:0 5px;margin-left:4px;vertical-align:3px;font-family:var(--f-body)}
+.dg .reg{border:0;background:none;color:var(--accent);font-size:11px;padding:2px 4px;text-decoration:underline;text-underline-offset:2px}
+.dg .ap{min-height:14px;height:auto;text-align:center;line-height:1.3}
+
+/* shape editor */
+/* Horizontal fretboard: nut on the left, 1st string on top, frets 1-12 left to right */
+.shape-ed{display:flex;flex-direction:column;gap:22px}
+.shape-ed .side{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px 28px;align-items:start}
+.shape-ed .side .full{grid-column:1/-1}
+.board-wrap{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:14px 12px 12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.board-scroll{overflow-x:auto;padding-bottom:4px}
+.board{display:grid;grid-template-columns:30px 30px 6px repeat(12,minmax(38px,1fr)) 56px 30px;min-width:640px;user-select:none}
+.board .hd{font-family:var(--f-mono);font-size:11px;color:var(--muted);text-align:center;padding-bottom:4px;position:relative}
+.board .hd.inlay::after{content:"";display:block;width:6px;height:6px;border-radius:50%;background:var(--line);margin:3px auto 0}
+.board .hd.inlay2::after{content:"";display:block;width:16px;height:6px;margin:3px auto 0;background:radial-gradient(circle at 3px 3px,var(--line) 3px,transparent 3.5px),radial-gradient(circle at 13px 3px,var(--line) 3px,transparent 3.5px)}
+.board .sn{font-family:var(--f-mono);font-size:11px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.board .top{border:0;background:none;height:40px;font-size:16px;color:var(--muted);display:grid;place-items:center;font-family:var(--f-mono);padding:0}
+.board .top.open{color:var(--ink)}
+.board .top.mute{color:#B4361F}
+.board .nut{background:var(--ink);border-radius:1px}
+.board .cell{border:0;height:40px;position:relative;padding:0;
+  background:linear-gradient(to bottom,transparent calc(50% - 1px),var(--muted) calc(50% - 1px),var(--muted) calc(50% + 1px),transparent calc(50% + 1px));
+  border-right:2px solid var(--line)}
+.board .cell:hover::after{content:"";position:absolute;inset:50% auto auto 50%;width:26px;height:26px;transform:translate(-50%,-50%);border-radius:50%;border:2px dashed var(--accent)}
+.board .cell .dot{position:absolute;inset:50% auto auto 50%;width:28px;height:28px;transform:translate(-50%,-50%);border-radius:50%;background:var(--accent);color:var(--paper);font-family:var(--f-mono);font-size:13px;font-weight:500;display:grid;place-items:center;z-index:1}
+.board .cell.muted{opacity:.35}
+.board .cell.inbar::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:22px;transform:translateX(-50%);background:var(--accent-soft);border-left:2px solid var(--accent);border-right:2px solid var(--accent);z-index:0;pointer-events:none}
+.board .cell.btop::before{top:20%;border-top:2px solid var(--accent);border-radius:11px 11px 0 0}
+.board .cell.bbot::before{bottom:20%;border-bottom:2px solid var(--accent);border-radius:0 0 11px 11px}
+.board .fsel{margin:4px 0 4px 8px;padding:3px 0;border:1px solid var(--line);border-radius:4px;background:var(--bg);font-family:var(--f-mono);font-size:12px;text-align:center}
+.board .pn{font-family:var(--f-mono);font-size:11px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.board-ctl{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:13px}
+.board-ctl select{padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg)}
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.big-dg{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap}
+.big-dg .nm{font-family:var(--f-chord);font-weight:700;font-size:40px;line-height:1}
+.code{font-family:var(--f-mono);font-size:13px;color:var(--muted)}
+.code b{color:var(--ink);font-weight:500;letter-spacing:.12em}
+.cands{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cands .c{border:1px dashed var(--accent);background:none;border-radius:5px;padding:2px 9px;font-family:var(--f-chord);font-weight:600;font-size:17px;color:var(--accent)}
+.lbl-s{font-size:11px;color:var(--muted);letter-spacing:.06em;font-weight:500}
+.chip.mine{border-style:dashed}
+.chip.again{border-color:var(--ink);min-width:7.5em}
+.chip.split{min-width:5.5em}
+.backup{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto;padding-top:8px;border-top:1px solid var(--line)}
+.backup .btn{font-size:12px;padding:4px 9px;cursor:pointer}
+.vsec{padding-top:6px}
+.vsec h2{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:700;margin:0 0 4px}
+.vsec .hint{margin:0 0 10px}
+.vlist{display:flex;flex-wrap:wrap;gap:8px}
+.vitem{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:6px 6px 4px;min-width:70px}
+.vitem .nm{font-family:var(--f-chord);font-weight:600;font-size:17px;line-height:1}
+.vitem .vs{font-size:10px;color:var(--muted)}
+.vitem .none{font-size:11px;color:var(--muted);height:59px;display:grid;place-items:center}
+.vitem.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.vpick{margin-top:12px;background:var(--paper);border:1px solid var(--accent);border-radius:6px;padding:12px}
+.vhead{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-bottom:10px}
+.vhead b{font-family:var(--f-chord);font-size:22px}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.vopt{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 4px}
+.vopt .vl{font-size:11px;font-weight:700;color:var(--muted)}
+.vopt .code{font-size:11px}
+.vopt.on{border:2px solid var(--accent);background:var(--accent-soft)}
+.vopt.on .vl{color:var(--accent)}
+.chip.split.on{background:var(--accent);border-color:var(--accent)}
+.chip.split.on b,.chip.split.on i{color:var(--paper)}
+.chip.again:disabled{opacity:.45;cursor:default}
+.chip.pad-toggle{border-color:var(--accent)}
+.chip.pad-toggle b{font-family:var(--f-body);font-size:13px;font-weight:700;color:var(--accent);padding-block:2px}
+.chip.pad-toggle.on{background:var(--accent-soft)}
+.pal.open{position:static}
+.pal-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-bottom:10px}
+.pal-head .target{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
+.pal-head select{padding:6px 10px;border:2px solid var(--accent);border-radius:6px;background:var(--paper);font-weight:700;max-width:60vw}
+.pad{margin-top:12px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.pad .board-ctl a.btn{text-decoration:none;color:var(--ink)}
+.pad-grid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:start}
+.pad-main{display:flex;flex-direction:column;gap:10px;min-width:0}
+.cands .c{display:inline-flex;flex-direction:column;align-items:center;line-height:1.15;padding:3px 10px}
+.cands .c small{font-family:var(--f-mono);font-size:10px;font-weight:400}
+.cands .c.on{background:var(--accent);color:var(--paper);border-style:solid}
+.ivl{font-size:10px;color:var(--accent);margin-left:2px;margin-right:6px}
+.pad-act{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pad-act input{width:9em;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);font-family:var(--f-chord);font-weight:600;font-size:18px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;
+  display:flex;gap:10px;align-items:center;max-width:calc(100% - 32px);padding:10px 16px;border-radius:8px;background:var(--ink);color:var(--paper);
+  font-size:14px;font-weight:500;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:50;transition:opacity .18s ease,transform .18s ease}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast .ti{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;font-size:12px;font-weight:700;flex:none;background:var(--ok);color:var(--paper)}
+.toast.warn .ti{background:#C2452B}
+button,.btn,.chip,.cell{transition:transform .12s ease,background-color .2s ease,border-color .2s ease}
+button.pressed,.btn.pressed,.chip.pressed{transform:scale(.94)}
+.cell.pressed{background-color:var(--accent-soft)}
+.btn.busy{opacity:.7;cursor:progress}
+.btn.done{background:var(--ok);border-color:var(--ok);color:var(--paper)}
+.btn.fail{background:#C2452B;border-color:#C2452B;color:#fff}
+.preview.flash .bars:last-child .bar:last-child{animation:flash .7s ease}
+@keyframes flash{from{background:var(--accent-soft)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}button.pressed,.btn.pressed,.chip.pressed{transform:none}.preview.flash .bars:last-child .bar:last-child{animation:none}}
+@media (max-width:760px){.pad-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){.shape-ed .side{grid-template-columns:minmax(0,1fr)}}
+
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .shelf{border-right:0;border-bottom:1px solid var(--line);padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .shelf.collapsed .list,.shelf.collapsed .search,.shelf.collapsed .note,.shelf.collapsed .backup{display:none}
+  .shelf .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .menu-btn{display:inline-block}
+  .main{padding-block:18px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .head h1{font-size:34px}
+  .paper{padding:14px 12px 18px}
+  .sec{grid-template-columns:minmax(0,1fr);gap:6px}
+  .mark{flex-direction:row}
+  .bar{padding:6px 5px;min-height:60px;column-gap:4px}
+  .ch .n{font-size:18px}
+  .ch .r{font-size:9px}
+  .ch .cd{margin-left:-3px}
+
+
+
+  .lines>.bars:last-child>.bar:last-child{border-right:4px double var(--ink)}
+
+  .bar.d3 .ch .n{font-size:14px}
+  .bar.d5 .ch .n{font-size:12px}
+  .fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fields .wide{grid-column:1/-1}
+}
+@media (min-width:761px){.shelf .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <aside class="shelf collapsed" id="shelf">
+    <div class="top">
+      <div class="brand">CHORD NOTE<small>コード進行ノート</small></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn small menu-btn" id="menuBtn" aria-expanded="false">曲一覧</button>
+        <button class="btn small primary" id="newBtn">＋ 新しい曲</button>
+      </div>
+    </div>
+    <div class="tabs" role="tablist"><button data-tab="songs" class="on">曲</button><button data-tab="shapes">マイコード</button></div>
+    <input class="search" id="search" type="search" placeholder="曲名・アーティストで検索" aria-label="検索">
+    <div class="list" id="list"></div>
+    <div class="note" id="storeNote"></div>
+    <div class="backup">
+      <button class="btn small" id="bkSave">バックアップを保存</button>
+      <label class="btn small" for="bkFile">バックアップを読み込む</label>
+      <input type="file" id="bkFile" accept=".json,application/json" hidden>
+    </div>
+  </aside>
+  <main class="main" id="main">
+    <div class="welcome"><h1>読み込み中…</h1><p class="note">保存された曲を取得しています。</p></div>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ---------- music theory ---------- */
+const SHARP=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const FLAT=["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
+const IDX={C:0,"B#":0,"C#":1,Db:1,D:2,"D#":3,Eb:3,E:4,Fb:4,F:5,"E#":5,"F#":6,Gb:6,G:7,"G#":8,Ab:8,A:9,"A#":10,Bb:10,B:11,Cb:11};
+const MAJ_KEYS=["C","Db","D","Eb","E","F","F#","G","Ab","A","Bb","B"];
+const MIN_KEYS=["Cm","C#m","Dm","Ebm","Em","Fm","F#m","Gm","G#m","Am","Bbm","Bm"];
+const ROMAN=["I","♭II","II","♭III","III","IV","♯IV","V","♭VI","VI","♭VII","VII"];
+const CHORD_RE=/^([A-G][#b]?)((?:6\/9|[^/])*)(?:\/([A-G][#b]?))?$/;
+
+function parseKey(k){const m=/^([A-G][#b]?)(m?)$/.exec(k||"C");return m?{root:IDX[m[1]],minor:!!m[2]}:{root:0,minor:false};}
+function keyAt(root,minor){root=((root%12)+12)%12;return minor?MIN_KEYS[root]:MAJ_KEYS[root];}
+function flatKey(k){return /b/.test(k)||["F","Dm","Gm","Cm","Fm"].includes(k);}
+function transposeKey(k,n){const p=parseKey(k);return keyAt(p.root+n,p.minor);}
+function noteName(i,flat){i=((i%12)+12)%12;return (flat?FLAT:SHARP)[i];}
+function transposeChord(ch,n,flat){
+  if(!n)return ch;const m=CHORD_RE.exec(ch);if(!m)return ch;
+  return noteName(IDX[m[1]]+n,flat)+m[2]+(m[3]?"/"+noteName(IDX[m[3]]+n,flat):"");
+}
+function isMinorQ(q){return /^m(?!aj)/.test(q)||/^dim|^°/.test(q);}
+function roman(ch,key){
+  const m=CHORD_RE.exec(ch);if(!m)return "";
+  const k=parseKey(key);let r=ROMAN[((IDX[m[1]]-k.root)%12+12)%12];
+  let q=m[2];
+  if(/^dim|^°/.test(q)){r=r.toLowerCase()+"°";q=q.replace(/^(dim|°)/,"");}
+  else if(isMinorQ(q)){r=r.toLowerCase();q=q.replace(/^m/,"");}
+  return r+q+(m[3]?"/"+ROMAN[((IDX[m[3]]-k.root)%12+12)%12]:"");
+}
+function diatonic(key){
+  const k=parseKey(key),flat=flatKey(key);
+  const deg=k.minor?[0,2,3,5,7,8,10]:[0,2,4,5,7,9,11];
+  const tri=k.minor?["m","dim","","m","m","",""]:["","m","m","","","m","dim"];
+  const sev=k.minor?["m7","m7b5","maj7","m7","m7","maj7","7"]:["maj7","m7","m7","maj7","7","m7","m7b5"];
+  const row=(qs)=>deg.map((d,i)=>{const c=noteName(k.root+d,flat)+qs[i];return {c,r:roman(c,key)};});
+  const out=[row(tri),row(sev)];
+  if(k.minor){const v=noteName(k.root+7,flat);out[0].push({c:v,r:"V"});out[1].push({c:v+"7",r:"V7"});}
+  return out;
+}
+/* bars text: "C G | Am F | %" */
+function legacyParseLine(line){
+  if(!line||!line.trim())return [];
+  let parts=line.split("|").map(s=>s.trim());
+  if(parts.length&&parts[0]==="")parts.shift();
+  if(parts.length&&parts[parts.length-1]==="")parts.pop();
+  return parts.map(p=>p.split(/\s+/).filter(Boolean));
+}
+/* a line break in the editor starts a new line on the chart */
+/* Format 2: each chord is its own bar; [C G] puts several chords in one bar. "|" is optional and ignored. */
+function parseLine(line){
+  const out=[];const re=/\[[^\]]*\]?|[^\s|\[\]]+/g;let m;
+  while((m=re.exec(line||""))){const t=m[0];
+    if(t[0]==="["){const inner=t.replace(/^\[|\]$/g,"").split(/\s+/).filter(x=>x&&x!=="|");if(inner.length)out.push(inner);}
+    else out.push([t]);}
+  return out;
+}
+function parseLines(text){return String(text||"").split(/\r?\n/).map(parseLine).filter(l=>l.length);}
+/* convert text written in the old "C G | Am F" style */
+function migrateText(text){return String(text||"").split(/\r?\n/).map(l=>{const bars=legacyParseLine(l);return bars.length?barsToText(bars):"";}).join("\n").replace(/\n+$/,"");}
+function migrateSong(s){if(s.fmt===2)return s;return Object.assign({},s,{fmt:2,sections:(s.sections||[]).map(x=>({name:x.name,bars:migrateText(x.bars)}))});}
+const migrated=new Set();
+function migrateAll(list){return list.map(s=>{if(s.fmt===2)return s;const m=migrateSong(s);
+  if(canWrite&&!migrated.has(s.id)){migrated.add(s.id);Promise.resolve().then(()=>store.save(m)).catch(()=>{});}return m;});}
+function parseBars(text){return parseLines(text).flat();}
+function barsToText(bars){return bars.map(b=>b.length>1?"["+b.join(" ")+"]":b[0]).join(" ");}
+function transposeText(text,n,flat){return parseLines(text).map(l=>barsToText(l.map(b=>b.map(c=>transposeChord(c,n,flat))))).join("\n");}
+
+/* ---------- chord shapes (low E → high e, -1 = mute) ---------- */
+const OPEN={C:[-1,3,2,0,1,0],D:[-1,-1,0,2,3,2],E:[0,2,2,1,0,0],G:[3,2,0,0,0,3],A:[-1,0,2,2,2,0],
+Am:[-1,0,2,2,1,0],Em:[0,2,2,0,0,0],Dm:[-1,-1,0,2,3,1],E7:[0,2,0,1,0,0],A7:[-1,0,2,0,2,0],D7:[-1,-1,0,2,1,2],
+G7:[3,2,0,0,0,1],C7:[-1,3,2,3,1,0],B7:[-1,2,1,2,0,2],Cmaj7:[-1,3,2,0,0,0],Fmaj7:[-1,-1,3,2,1,0],
+Amaj7:[-1,0,2,1,2,0],Dmaj7:[-1,-1,0,2,2,2],Gmaj7:[3,2,0,0,0,2],Am7:[-1,0,2,0,1,0],Em7:[0,2,0,0,0,0],Dm7:[-1,-1,0,2,1,1],
+Asus4:[-1,0,2,2,3,0],Dsus4:[-1,-1,0,2,3,3],Esus4:[0,2,2,2,0,0],Cadd9:[-1,3,2,0,3,0]};
+const TPL={E:{"":[0,2,2,1,0,0],m:[0,2,2,0,0,0],"7":[0,2,0,1,0,0],m7:[0,2,0,0,0,0],maj7:[0,-1,1,1,0,-1],sus4:[0,2,2,2,0,0]},
+A:{"":[-1,0,2,2,2,0],m:[-1,0,2,2,1,0],"7":[-1,0,2,0,2,0],m7:[-1,0,2,0,1,0],maj7:[-1,0,2,1,2,0],sus4:[-1,0,2,2,3,0]}};
+function normQ(q){
+  const s=q.replace(/^(M7|△7|Maj7|△)/,"maj7");
+  if(s==="add9")return ["add9",false];
+  if(/^maj7/.test(s))return ["maj7",s!=="maj7"];
+  if(/^m7(?!b5|-5)/.test(s))return ["m7",s!=="m7"];
+  if(/^m(?!aj)/.test(s))return ["m",s!=="m"];
+  if(/^7/.test(s))return ["7",s!=="7"];
+  if(/^sus4/.test(s))return ["sus4",s!=="sus4"];
+  if(s===""||s==="maj")return ["",false];
+  return ["",true];
+}
+function shapeFor(ch){
+  const m=CHORD_RE.exec(ch);if(!m)return null;
+  const root=IDX[m[1]];let [q,approx]=normQ(m[2]);
+  const nat=SHARP[root];
+  if(!nat.includes("#")&&OPEN[nat+q])return {frets:OPEN[nat+q],barre:0,approx};
+  if(q==="add9"){q="";approx=true;if(!nat.includes("#")&&OPEN[nat])return {frets:OPEN[nat],barre:0,approx};}
+  const fE=((root-4)%12+12)%12,fA=((root-9)%12+12)%12;
+  const useE=fE<=fA,base=useE?fE:fA,t=TPL[useE?"E":"A"][q];
+  const frets=t.map(v=>v<0?-1:v+base);
+  const played=t.map((v,i)=>v<0?null:i).filter(i=>i!==null);
+  const first=played[0],last=played[played.length-1];
+  const canBarre=base>0&&t[first]===0&&t[last]===0&&t.slice(first,last+1).every(v=>v>=0);
+  return {frets,barre:canBarre?base:0,bFrom:first,bTo:last,approx};
+}
+function windowStart(frets){const pos=frets.filter(f=>f>0);const mx=Math.max(0,...pos),mn=pos.length?Math.min(...pos):1;return mx<=5?1:mn;}
+function diagramSVG(shape,scale){
+  scale=scale||1;
+  const W=84,H=96,x0=21,dx=11,y0=24,dy=14,N=5;
+  const start=windowStart(shape.frets);
+  const fg=shape.fingers||[];
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="${W*scale}" height="${H*scale}" role="img" aria-label="ダイアグラム">`;
+  for(let i=0;i<6;i++)s+=`<line x1="${x0+i*dx}" y1="${y0}" x2="${x0+i*dx}" y2="${y0+N*dy}" stroke="var(--muted)" stroke-width="1"/>`;
+  for(let j=0;j<=N;j++)s+=`<line x1="${x0}" y1="${y0+j*dy}" x2="${x0+5*dx}" y2="${y0+j*dy}" stroke="var(--muted)" stroke-width="1"/>`;
+  if(start===1)s+=`<rect x="${x0-1}" y="${y0-3}" width="${5*dx+2}" height="4" fill="var(--ink)"/>`;
+  else s+=`<text x="${x0-4}" y="${y0+dy*0.5+4.5}" font-size="13" font-weight="700" text-anchor="end" fill="var(--ink)" font-family="Barlow Condensed,Arial Narrow,sans-serif">${start}</text>`;
+  if(shape.barre&&shape.barre>=start){const y=y0+(shape.barre-start+0.5)*dy;
+    s+=`<rect x="${x0+shape.bFrom*dx-4}" y="${y-4}" width="${(shape.bTo-shape.bFrom)*dx+8}" height="8" rx="4" fill="var(--ink)"/>`;}
+  shape.frets.forEach((f,i)=>{const x=x0+i*dx;
+    if(f<0)s+=`<text x="${x}" y="${y0-7}" font-size="9" text-anchor="middle" fill="var(--muted)">×</text>`;
+    else if(f===0)s+=`<circle cx="${x}" cy="${y0-10}" r="3" fill="none" stroke="var(--muted)" stroke-width="1.2"/>`;
+    else if(!(shape.barre&&f===shape.barre&&i>=shape.bFrom&&i<=shape.bTo)){const cy=y0+(f-start+0.5)*dy;
+      s+=`<circle cx="${x}" cy="${cy}" r="${fg[i]?5:4.2}" fill="var(--accent)"/>`;
+      if(fg[i])s+=`<text x="${x}" y="${cy+2.6}" font-size="7" text-anchor="middle" fill="var(--paper)" font-family="IBM Plex Mono,monospace">${fg[i]}</text>`;}
+  });
+  return s+"</svg>";
+}
+
+/* ---------- helpers ---------- */
+const $=(id)=>document.getElementById(id);
+const esc=(s)=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const LETTERS="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+function chordHTML(ch){
+  if(ch==="%")return `<div class="ch rep"><span class="n">𝄎</span></div>`;
+  const m=CHORD_RE.exec(ch);
+  if(!m)return `<div class="ch"><span class="n">${esc(ch)}</span></div>`;
+  return `<span class="n">${esc(m[1])}${m[2]?`<sup>${esc(m[2])}</sup>`:""}${m[3]?`<span class="bass">/${esc(m[3])}</span>`:""}</span>`;
+}
+function barsHTML(text,offset,key,showRoman,diag){
+  const lines=parseLines(text);
+  if(!lines.length)return `<div class="empty-sec">まだコードがありません</div>`;
+  const flat=flatKey(key);
+  let prev=null; // a chord repeated right after itself is drawn as a slash
+  const slash=`<div class="ch same" title="同じコードが続く"><span class="n">/</span></div>`;
+  return `<div class="lines">`+lines.map(bars=>`<div class="bars">`+bars.map(b=>`<div class="bar${b.length>=5?" d5":b.length>=3?" d3":""}">`+b.map(c=>{
+    if(c==="%")return chordHTML(c);
+    if(c==="/")return slash;
+    const t=transposeChord(c,offset,flat);
+    if(t===prev)return slash;
+    prev=t;
+    const sh=diag?diag(t):null;
+    return `<div class="ch">${chordHTML(t)}${showRoman?`<span class="r">${esc(roman(t,key))}</span>`:""}${diag?`<span class="cd">${sh?diagramSVG(sh,0.7):""}</span>`:""}</div>`;
+  }).join("")+`</div>`).join("")+`</div>`).join("")+`</div>`;
+}
+function uid(){return "s"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function blankSong(){return {fmt:2,title:"新しい曲",artist:"",key:"C",capo:0,bpm:100,time:"4/4",memo:"",
+  sections:[{name:"イントロ",bars:""},{name:"Aメロ",bars:""},{name:"サビ",bars:""}],updatedAt:Date.now()};}
+
+/* ---------- state ---------- */
+let songs=[];let current=null;let mode="view";let offset=0;let showRoman=true;let showDiag=true;let canWrite=true;
+let draft=null;let dirty=false;let saveTimer=null;let lastFocusSec=0;let confirmDelete=false;
+let shapes=[];let tab="songs";let currentShape=null;let shapeDraft=null;let shapeStart=1;let confirmShapeDel=false;
+const store={kind:"none",save:async()=>{},remove:async()=>{},saveShape:async()=>{},removeShape:async()=>{}};
+
+/* feedback: inline status, toast, and button states. quiet=true skips the toast (typing, autosave) */
+function setStatus(t,ok,quiet){const el=$("status");if(el){el.textContent=t;el.className="status"+(ok?" ok":"");}if(!quiet)toast(t,ok);}
+let toastTimer=null;
+function toast(t,ok){
+  let el=$("toast");
+  if(!el){el=document.createElement("div");el.id="toast";el.className="toast";el.setAttribute("role","status");el.setAttribute("aria-live","polite");document.body.appendChild(el);}
+  el.innerHTML=`<span class="ti">${ok?"✓":"!"}</span><span>${esc(t)}</span>`;
+  el.className="toast show "+(ok?"ok":"warn");
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.className="toast "+(ok?"ok":"warn");},2400);
+}
+function btnBusy(b,label){if(!b)return;if(!b.dataset.label)b.dataset.label=b.innerHTML;b.disabled=true;b.classList.add("busy");b.textContent=label||"保存中…";}
+function btnDone(b,label,ok){
+  if(!b)return;if(!b.dataset.label)b.dataset.label=b.innerHTML;
+  b.disabled=false;b.classList.remove("busy");b.classList.add(ok===false?"fail":"done");b.textContent=label;
+  clearTimeout(b._t);b._t=setTimeout(()=>{b.classList.remove("done","fail");b.innerHTML=b.dataset.label;delete b.dataset.label;},1500);
+}
+document.addEventListener("pointerdown",e=>{const b=e.target.closest("button,.chip,.cell,.btn");if(!b)return;
+  b.classList.add("pressed");setTimeout(()=>b.classList.remove("pressed"),200);});
+
+/* ---------- storage backends ---------- */
+function initLocal(){
+  store.kind="local";
+  const read=(K)=>{try{return JSON.parse(localStorage.getItem(K)||"[]");}catch(e){return [];}};
+  const write=(K,arr)=>{try{localStorage.setItem(K,JSON.stringify(arr));}catch(e){}};
+  const SK="chordnote-songs",CK="chordnote-shapes";
+  songs=migrateAll(read(SK));shapes=read(CK);
+  store.save=async(s)=>{const a=read(SK).filter(x=>x.id!==s.id);a.push(s);write(SK,a);songs=a;};
+  store.remove=async(id)=>{const a=read(SK).filter(x=>x.id!==id);write(SK,a);songs=a;};
+  store.saveShape=async(s)=>{const a=read(CK).filter(x=>x.id!==s.id);a.push(s);write(CK,a);shapes=a;};
+  store.removeShape=async(id)=>{const a=read(CK).filter(x=>x.id!==id);write(CK,a);shapes=a;};
+  $("storeNote").textContent="データはこのブラウザの中に保存されます。消えないよう、ときどき「バックアップを保存」してください。";
+  afterLoad();
+}
+function initDb(db){
+  store.kind="db";
+  const col=db.collection("songs");
+  store.save=async(s)=>{const {id,...body}=s;await col.doc(id).set(body);};
+  store.remove=async(id)=>{await col.doc(id).delete();};
+  const scol=db.collection("shapes");
+  store.saveShape=async(s)=>{const {id,...body}=s;await scol.doc(id).set(body);};
+  store.removeShape=async(id)=>{await scol.doc(id).delete();};
+  scol.onSnapshot(snap=>{
+    shapes=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
+    if(!booted)return;
+    if(tab==="shapes")renderList();
+    if(tab==="songs"&&mode==="view")renderMain();
+    if(tab==="songs"&&mode==="edit")renderPalette();
+  },()=>{});
+  let loaded=false;
+  const timer=setTimeout(()=>{if(!loaded){$("storeNote").textContent="保存データにまだ接続できません。通信状態を確認してください。";if(!songs.length)afterLoad();}},10000);
+  col.onSnapshot(snap=>{
+    songs=migrateAll(snap.docs.map(d=>Object.assign({id:d.id},d.data())));
+    if(!snap.metadata.fromCache){loaded=true;clearTimeout(timer);$("storeNote").textContent="";}
+    if(!current||loaded||songs.length)afterLoad(true);
+  },err=>{clearTimeout(timer);$("storeNote").textContent="保存データを読み込めませんでした（"+err.code+"）。";afterLoad();});
+}
+let booted=false;
+function afterLoad(fromSnap){
+  if(!booted){booted=true;const s=sorted();if(s.length&&window.innerWidth>760)current=s[0].id;renderList();renderMain();return;}
+  renderList();
+  if(tab==="shapes")return; // shape editor keeps its own state
+  if(fromSnap&&mode==="edit")return; // keep the editor stable while typing
+  if(current&&!songs.find(s=>s.id===current))current=null;
+  renderMain();
+}
+
+/* ---------- list ---------- */
+function sorted(){return songs.slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));}
+function fretCode(fr){return fr.map(f=>f<0?"x":f>9?"("+f+")":String(f)).join("");}
+function sortedShapes(){return shapes.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","ja")||(a.updatedAt||0)-(b.updatedAt||0));}
+function renderList(){
+  document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
+  $("newBtn").textContent=tab==="songs"?"＋ 新しい曲":"＋ 形を登録";
+  $("search").placeholder=tab==="songs"?"曲名・アーティストで検索":"コード名で検索";
+  if(tab==="shapes")return renderShapeList();
+  const q=$("search").value.trim().toLowerCase();
+  const items=sorted().filter(s=>!q||(s.title||"").toLowerCase().includes(q)||(s.artist||"").toLowerCase().includes(q));
+  $("list").innerHTML=items.length?items.map(s=>`<button class="item${s.id===current?" on":""}" data-id="${esc(s.id)}">
+    <span style="min-width:0"><span class="t">${esc(s.title||"無題")}</span><span class="a">${esc(s.artist||"—")}</span></span>
+    <span class="k">${esc(s.key||"")}</span></button>`).join("")
+    :`<div class="note">${q?"一致する曲がありません。":"まだ曲がありません。「＋ 新しい曲」から追加できます。"}</div>`;
+  $("newBtn").hidden=!canWrite;
+}
+document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>{
+  if(tab===b.dataset.tab)return;flush();tab=b.dataset.tab;$("search").value="";confirmShapeDel=false;
+  if(tab==="songs")mode="view";
+  renderList();renderMain();}));
+$("list").addEventListener("click",e=>{
+  const sb=e.target.closest("[data-sid]");
+  if(sb){openShape(sb.dataset.sid);$("shelf").classList.add("collapsed");$("menuBtn").setAttribute("aria-expanded","false");renderList();return;}
+  const b=e.target.closest(".item");if(!b)return;
+  flush();current=b.dataset.id;mode="view";offset=0;confirmDelete=false;
+  $("shelf").classList.add("collapsed");$("menuBtn").setAttribute("aria-expanded","false");
+  renderList();renderMain();});
+$("search").addEventListener("input",renderList);
+$("menuBtn").addEventListener("click",()=>{const c=$("shelf").classList.toggle("collapsed");$("menuBtn").setAttribute("aria-expanded",String(!c));});
+$("newBtn").addEventListener("click",async()=>{
+  if(tab==="shapes"){newShape("",null);$("shelf").classList.add("collapsed");renderList();return;}
+  flush();const s=Object.assign({id:uid()},blankSong());
+  songs.push(s);current=s.id;mode="edit";offset=0;
+  $("shelf").classList.add("collapsed");
+  renderList();renderMain();
+  try{await store.save(s);setStatus("保存しました",true);}catch(e){setStatus("保存できませんでした");}
+});
+
+/* ---------- main ---------- */
+function song(){return songs.find(s=>s.id===current);}
+function renderMain(){
+  if(tab==="shapes")return renderShapeMain();
+  const s=song();const main=$("main");
+  if(!s){main.innerHTML=`<div class="welcome"><h1>曲を選んでください</h1>
+    <p class="note">左の一覧から曲を開くか、新しい曲を作成します。コードは小節ごとに <b>|</b> で区切って入力します。</p>
+    ${canWrite?`<button class="btn primary" id="wNew">＋ 新しい曲を作る</button>`:""}</div>`;
+    const w=$("wNew");if(w)w.onclick=()=>$("newBtn").click();return;}
+  if(mode==="edit"){draft=JSON.parse(JSON.stringify(s));resetHistory();renderEditor();}else renderView(s);
+}
+function toolbar(){
+  return `<div class="toolbar">
+    <div class="grp">
+      <div class="seg" role="tablist">
+        <button data-mode="view" class="${mode==="view"?"on":""}">表示</button>
+        ${canWrite?`<button data-mode="edit" class="${mode==="edit"?"on":""}">編集</button>`:""}
+      </div>
+      ${mode==="view"?`<span class="tp">移調 <button class="btn small" data-tp="-1" aria-label="半音下げる">−</button><output>${offset>0?"+"+offset:offset}</output><button class="btn small" data-tp="1" aria-label="半音上げる">＋</button></span>
+      <label class="tp"><input type="checkbox" id="romanChk" ${showRoman?"checked":""}> 度数</label>
+      <label class="tp"><input type="checkbox" id="diagChk" ${showDiag?"checked":""}> コード図</label>`:""}
+    </div>
+    <div class="grp">
+      ${mode==="view"&&offset&&canWrite?`<button class="btn small" id="applyTp">この調で保存</button>`:""}
+      ${mode==="view"?`<button class="btn small" id="copyBtn">テキストでコピー</button><button class="btn small primary" id="pdfBtn">PDFで保存</button>`:""}
+      ${mode==="edit"?`<button class="btn small" id="undoBtn" title="元に戻す（⌘Z / Ctrl+Z）">↶ 元に戻す</button><button class="btn small" id="redoBtn" title="やり直す（⇧⌘Z / Ctrl+Y）">↷ やり直す</button>`:""}
+      <span class="status" id="status"></span>
+    </div></div>`;
+}
+function bindToolbar(){
+  document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{flush();mode=b.dataset.mode;offset=0;confirmDelete=false;renderMain();});
+  document.querySelectorAll("[data-tp]").forEach(b=>b.onclick=()=>{offset=Math.max(-11,Math.min(11,offset+Number(b.dataset.tp)));renderMain();});
+  const dc=$("diagChk");if(dc)dc.onchange=()=>{showDiag=dc.checked;try{localStorage.setItem("chordnote-diag",showDiag?"1":"0");}catch(e){}renderMain();};
+  const r=$("romanChk");if(r)r.onchange=()=>{showRoman=r.checked;try{localStorage.setItem("chordnote-roman",showRoman?"1":"0");}catch(e){}renderMain();};
+  const a=$("applyTp");if(a)a.onclick=applyTranspose;
+  const u=$("undoBtn");if(u)u.onclick=undo;const rd=$("redoBtn");if(rd)rd.onclick=redo;updateUndoButtons();
+  const c=$("copyBtn");if(c)c.onclick=copyText;
+  const pb=$("pdfBtn");if(pb)pb.onclick=savePdf;
+}
+function renderView(s){
+  const key=transposeKey(s.key,offset);
+  const sounding=s.capo?transposeKey(key,Number(s.capo)):null;
+  // chord diagram under each chord: the fingering entered for this song, then My Chords, then the standard shape
+  const cache={};
+  const diag=showDiag?(c)=>{if(c in cache)return cache[c];
+    return cache[c]=effectiveShape(offset?null:s.voicings,c);}:null;
+  $("main").innerHTML=`<div class="sheet">${toolbar()}
+    <header class="head"><h1>${esc(s.title||"無題")}</h1><div class="artist">${esc(s.artist||"")}</div>
+      <div class="meta"><span>KEY <b>${esc(key)}</b>${offset?` <span class="orig">(原調 ${esc(s.key)})</span>`:""}</span>
+      <span>CAPO <b>${s.capo?esc(s.capo):"なし"}</b>${sounding?` <span class="orig">実音 ${esc(sounding)}</span>`:""}</span>
+      <span>♩= <b>${esc(s.bpm||"—")}</b></span><span>拍子 <b>${esc(s.time||"4/4")}</b></span>
+      <span>小節数 <b>${(s.sections||[]).reduce((n,x)=>n+parseBars(x.bars).length,0)}</b></span></div></header>
+    <section class="paper">${(s.sections||[]).map((sec,i)=>`<div class="sec"><div class="mark"><div class="box">${LETTERS[i]||"•"}</div><div class="nm">${esc(sec.name)}</div></div>
+      ${barsHTML(sec.bars,offset,key,showRoman,diag)}</div>`).join("")||`<div class="empty-sec">セクションがありません。「編集」から追加してください。</div>`}</section>
+    ${s.memo?`<section class="memo"><h2>メモ</h2><p>${esc(s.memo)}</p></section>`:""}
+    <div id="copyArea"></div></div>`;
+  bindToolbar();
+  document.querySelectorAll("[data-reg]").forEach(b=>b.onclick=()=>{
+    const c=b.dataset.reg;tab="shapes";$("search").value="";newShape(c,shapeFor(c));renderList();});
+}
+async function applyTranspose(){
+  const s=song();if(!s)return;const key=transposeKey(s.key,offset),flat=flatKey(key);
+  const next=Object.assign({},s,{key,sections:s.sections.map(sec=>({name:sec.name,bars:transposeText(sec.bars,offset,flat)})),updatedAt:Date.now()});
+  Object.assign(s,next);offset=0;renderList();renderMain();
+  btnBusy($("applyTp"));try{await store.save(next);setStatus("移調して保存しました",true);}catch(e){setStatus("保存できませんでした");}
+}
+function songText(s,off){
+  const key=transposeKey(s.key,off),flat=flatKey(key);
+  let t=`${s.title}${s.artist?" / "+s.artist:""}\nKey: ${key}  Capo: ${s.capo||0}  BPM: ${s.bpm||"-"}  ${s.time||"4/4"}\n`;
+  (s.sections||[]).forEach(sec=>{t+=`\n[${sec.name}]\n`;
+    parseLines(sec.bars).forEach(line=>{const bars=line.map(b=>b.map(c=>transposeChord(c,off,flat)));
+      for(let i=0;i<bars.length;i+=4)t+="| "+bars.slice(i,i+4).map(b=>b.join(" ")).join(" | ")+" |\n";});});
+  if(s.memo)t+=`\nメモ: ${s.memo}\n`;return t;
+}
+function copyText(){
+  const s=song();if(!s)return;const text=songText(s,offset);
+  const fallback=()=>{$("copyArea").innerHTML=`<textarea class="copybox" id="copyBox" readonly aria-label="コピー用テキスト"></textarea>`;const b=$("copyBox");b.value=text;b.focus();b.select();setStatus("選択した文字をコピーしてください");};
+  try{navigator.clipboard.writeText(text).then(()=>{setStatus("コピーしました",true);btnDone($("copyBtn"),"✓ コピーしました");},fallback);}catch(e){fallback();}
+}
+
+/* ---------- editor ---------- */
+const KEYS_ALL=MAJ_KEYS.concat(MIN_KEYS);
+function renderEditor(){
+  const d=draft;touchedSecs.clear();if(lastFocusSec>=d.sections.length)lastFocusSec=0;
+  $("main").innerHTML=`<div class="sheet">${toolbar()}
+    <div class="ed">
+      <div class="fields">
+        <div class="f wide"><label for="fTitle">曲名</label><input id="fTitle" data-f="title" value="${esc(d.title)}"></div>
+        <div class="f wide"><label for="fArtist">アーティスト</label><input id="fArtist" data-f="artist" value="${esc(d.artist)}"></div>
+        <div class="f"><label for="fKey">キー</label><select id="fKey" data-f="key">${KEYS_ALL.map(k=>`<option ${k===d.key?"selected":""}>${k}</option>`).join("")}</select></div>
+        <div class="f"><label for="fCapo">カポ</label><select id="fCapo" data-f="capo">${Array.from({length:10},(_,i)=>`<option value="${i}" ${Number(d.capo)===i?"selected":""}>${i||"なし"}</option>`).join("")}</select></div>
+        <div class="f"><label for="fBpm">BPM</label><input id="fBpm" data-f="bpm" type="number" min="20" max="300" inputmode="numeric" value="${esc(d.bpm)}"></div>
+        <div class="f"><label for="fTime">拍子</label><select id="fTime" data-f="time">${["4/4","3/4","6/8","2/4","12/8"].map(t=>`<option ${t===d.time?"selected":""}>${t}</option>`).join("")}</select></div>
+      </div>
+      <p class="hint">コードをスペースで区切って並べると、<b>1つのコードが1小節</b>になります。1小節を分けたいときだけ <code>[ ]</code> で囲みます（パレットの「小節を分割」ボタンでも入ります）。<code>[C G]</code> は半分ずつ、<code>[C / / G]</code> は3拍と1拍。<code>/</code> だけの小節は前のコードが続く、<code>%</code> は前の小節の繰り返し。改行するとコード表も改行します。例：<code>C G/B [Am G] F</code></p>
+      <div id="secs">${d.sections.map((sec,i)=>secEditorHTML(sec,i)).join("")}</div>
+      <div><button class="btn" id="addSec">＋ セクションを追加</button></div>
+      <div class="f"><label for="fMemo">メモ（ストローク、リズム、気づいたことなど）</label><textarea id="fMemo" data-f="memo">${esc(d.memo)}</textarea></div>
+      <div>${confirmDelete?`<span class="note">この曲を削除しますか？ 元に戻せません。</span> <button class="btn small danger" id="delYes">削除する</button> <button class="btn small" id="delNo">やめる</button>`
+        :`<button class="btn small danger" id="delBtn">この曲を削除</button>`}</div>
+      <div class="pal" id="pal"></div>
+      <section class="vsec"><h2>コードの形を選ぶ</h2>
+        <p class="hint">コードをタップすると、押さえられる形の候補が出ます。選んだ形が曲のコード図に使われます。</p>
+        <div class="vlist" id="vlist"></div><div id="vpick"></div></section>
+    </div></div>`;
+  bindToolbar();bindEditor();renderPalette();vOpen=null;renderVoicingList();
+}
+function secEditorHTML(sec,i){
+  return `<div class="esec" data-i="${i}">
+    <div class="row"><span class="mark"><span class="box" style="width:28px;height:28px;font-size:17px">${LETTERS[i]||"•"}</span></span>
+      <input class="name" id="secName${i}" data-sf="name" value="${esc(sec.name)}" aria-label="セクション名">
+      <button class="btn small" data-act="up" ${i===0?"disabled":""} aria-label="上へ">↑</button>
+      <button class="btn small" data-act="down" ${i===draft.sections.length-1?"disabled":""} aria-label="下へ">↓</button>
+      <button class="btn small" data-act="dup">複製</button>
+      <button class="btn small danger" data-act="del">削除</button></div>
+    <textarea class="bars-in" id="secBars${i}" data-sf="bars" spellcheck="false" autocapitalize="off" placeholder="C G Am [F G]" aria-label="${esc(sec.name)}のコード">${esc(sec.bars)}</textarea>
+    <div class="preview" id="pv${i}">${barsHTML(sec.bars,0,draft.key,showRoman)}</div></div>`;
+}
+function bindEditor(){
+  document.querySelectorAll("[data-f]").forEach(el=>{
+    const ev=el.tagName==="SELECT"?"change":"input";
+    el.addEventListener(ev,()=>{let v=el.value;if(el.dataset.f==="capo"||el.dataset.f==="bpm")v=v===""?"":Number(v);
+      draft[el.dataset.f]=v;markDirty(ev==="input");
+      if(el.dataset.f==="key"){refreshPreviews();renderPalette();}
+    });
+  });
+  const secs=$("secs");
+  secs.addEventListener("input",e=>{const box=e.target.closest(".esec");if(!box||!e.target.dataset.sf)return;
+    const i=Number(box.dataset.i);draft.sections[i][e.target.dataset.sf]=e.target.value;
+    if(e.target.dataset.sf==="bars")$("pv"+i).innerHTML=barsHTML(e.target.value,0,draft.key,showRoman);
+    markDirty(e.isTrusted);});
+  secs.addEventListener("focusin",e=>{const box=e.target.closest(".esec");if(!box)return;
+    const i=Number(box.dataset.i);if(e.target.dataset.sf==="bars")touchedSecs.add(i);setTarget(i);});
+  secs.addEventListener("click",e=>{const box=e.target.closest(".esec");if(box&&!e.target.closest("[data-act]"))setTarget(Number(box.dataset.i));});
+  secs.addEventListener("input",e=>{if(e.target.dataset.sf==="name")renderTargetSelect();else{updateAgain();clearTimeout(vlTimer);vlTimer=setTimeout(renderVoicingList,400);}});
+  secs.addEventListener("keyup",updateAgain);secs.addEventListener("mouseup",updateAgain);
+  secs.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b)return;const i=Number(b.closest(".esec").dataset.i);const S=draft.sections;
+    if(b.dataset.act==="up"&&i>0)[S[i-1],S[i]]=[S[i],S[i-1]];
+    if(b.dataset.act==="down"&&i<S.length-1)[S[i+1],S[i]]=[S[i],S[i+1]];
+    if(b.dataset.act==="dup")S.splice(i+1,0,{name:S[i].name+"（2）",bars:S[i].bars});
+    if(b.dataset.act==="del")S.splice(i,1);
+    markDirty();rerenderSecs();});
+  $("addSec").onclick=()=>{draft.sections.push({name:"セクション"+(draft.sections.length+1),bars:""});markDirty();rerenderSecs();
+    const n=draft.sections.length-1;const t=$("secName"+n);if(t){t.focus();t.select();}};
+  const del=$("delBtn");if(del)del.onclick=()=>{confirmDelete=true;flush();renderEditor();};
+  const no=$("delNo");if(no)no.onclick=()=>{confirmDelete=false;renderEditor();};
+  const yes=$("delYes");if(yes)yes.onclick=async()=>{const id=current;clearTimeout(saveTimer);dirty=false;
+    songs=songs.filter(x=>x.id!==id);current=null;mode="view";confirmDelete=false;renderList();renderMain();
+    try{await store.remove(id);toast("曲を削除しました",true);}catch(e){toast("削除できませんでした",false);}};
+}
+function rerenderSecs(){$("secs").innerHTML=draft.sections.map((s,i)=>secEditorHTML(s,i)).join("");touchedSecs.clear();setTarget(lastFocusSec);}
+/* where palette / fretboard input goes */
+const touchedSecs=new Set();
+function setTarget(i){
+  if(!draft)return;lastFocusSec=Math.max(0,Math.min(i,draft.sections.length-1));
+  document.querySelectorAll(".esec").forEach(x=>x.classList.toggle("focus",Number(x.dataset.i)===lastFocusSec));
+  renderTargetSelect();
+  const pi=$("pInsert");if(pi){const s=draft.sections[lastFocusSec];pi.textContent=`「${s?s.name:"セクション"}」に入力`;}
+  updateAgain();
+}
+/* "same chord again": the last chord before the insertion point, else the last one entered anywhere */
+let lastInserted="";
+function againChord(){
+  if(!draft)return "";
+  const i=lastFocusSec,ta=$("secBars"+i);
+  const pick=(txt)=>{const t=txt.split(/[\s|\[\]]+/).filter(x=>x&&x!=="%"&&x!=="/");return t.length?t[t.length-1]:"";};
+  if(ta){const pos=touchedSecs.has(i)?(ta.selectionStart??ta.value.length):ta.value.length;const c=pick(ta.value.slice(0,pos));if(c)return c;}
+  if(lastInserted)return lastInserted;
+  for(let k=i-1;k>=0;k--){const c=pick(draft.sections[k].bars||"");if(c)return c;}
+  return "";
+}
+function splitOpen(){
+  const i=lastFocusSec,ta=$("secBars"+i);if(!ta)return false;
+  const pos=touchedSecs.has(i)?(ta.selectionStart??ta.value.length):ta.value.length;
+  const t=ta.value.slice(0,pos);return t.split("[").length>t.split("]").length;
+}
+function updateSplit(){const b=$("splitChip");if(!b)return;const o=splitOpen();
+  b.querySelector("b").textContent=o?"]":"[";b.querySelector("i").textContent=o?"分割おわり":"小節を分割";b.classList.toggle("on",o);}
+function updateAgain(){updateSplit();const b=$("againChip");if(!b)return;const c=againChord();b.querySelector("b").textContent=c||"—";b.disabled=!c;}
+function renderTargetSelect(){
+  const sel=$("palTarget");if(!sel||!draft)return;
+  sel.innerHTML=draft.sections.map((s,i)=>`<option value="${i}" ${i===lastFocusSec?"selected":""}>${esc((LETTERS[i]||"•")+"  "+s.name)}</option>`).join("");
+  const pi=$("pInsert");if(pi){const s=draft.sections[lastFocusSec];pi.textContent=`「${s?s.name:"セクション"}」に入力`;}
+}
+function refreshPreviews(){draft.sections.forEach((s,i)=>{const p=$("pv"+i);if(p)p.innerHTML=barsHTML(s.bars,0,draft.key,showRoman);});}
+function renderPalette(){
+  if(!$("pal")||!draft)return;
+  const rows=diatonic(draft.key);
+  const mineNames=[...new Set(sortedShapes().map(s=>s.name).filter(Boolean))];
+  $("pal").innerHTML=`<div class="pal-head"><label class="target">入力先 <select id="palTarget" aria-label="コードを入力するセクション"></select></label>
+      <span class="status" id="palStatus"></span></div>
+    <h2>${esc(draft.key)} のダイアトニックコード（タップで入力）</h2>`+rows.map(r=>`<div class="chips" style="margin-bottom:6px">${r.map(x=>`<button class="chip" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><i>${esc(x.r)}</i></button>`).join("")}</div>`).join("")
+    +(mineNames.length?`<div class="chips" style="margin-bottom:6px">${mineNames.map(n=>`<button class="chip mine" data-c="${esc(n)}"><b>${esc(n)}</b><i>${esc(roman(n,draft.key)||"マイ")}</i></button>`).join("")}</div>`:"")
+    +`<div class="chips"><button class="chip again" id="againChip" aria-label="同じコードをもう一回入力"><b>—</b><i>同じコードをもう一回</i></button><button class="chip split" id="splitChip"><b>[ ]</b><i>小節を分割</i></button><button class="chip" data-c="%"><b>%</b><i>繰り返し</i></button><button class="chip" data-c="/"><b>/</b><i>続く</i></button>
+      <button class="chip pad-toggle${padOpen?" on":""}" id="padToggle" aria-expanded="${padOpen}"><b>${padOpen?"閉じる":"＋ コードを入力"}</b><i>指板から逆引き</i></button></div>`
+    +(padOpen?`<div class="pad">
+      <div class="board-ctl">
+        <label><input type="checkbox" id="pBarre" ${padDraft.barreOn?"checked":""}> セーハ</label>
+        <button class="btn small" id="pClear">リセット</button>
+        <button class="btn small" id="pPlay">♪ 鳴らす</button>
+        <a class="btn small" href="https://o-to.khufrudamonotes.com/o-to-reverse-lookup-fingerboard" target="_blank" rel="noopener">o-to の逆引きでも確認 ↗</a>
+      </div>
+      <div class="board-scroll"><div class="board" id="pBoard">${boardInnerHTML(padDraft)}</div></div>
+      <div class="pad-res" id="pRes"></div></div>`:"");
+  $("pal").classList.toggle("open",padOpen);
+  $("pal").onmousedown=e=>{if(e.target.closest(".chip"))e.preventDefault();};
+  $("pal").onclick=e=>{
+    if(e.target.closest("#padToggle")){padOpen=!padOpen;if(padOpen&&!padDraft)resetPad();renderPalette();return;}
+    if(e.target.closest("#splitChip")){insertChord(splitOpen()?"]":"[");return;}
+    if(e.target.closest("#againChip")){const c=againChord();if(c)insertChord(c);else toast("まだ入力したコードがありません",false);return;}
+    const b=e.target.closest(".chip");if(!b||!b.dataset.c)return;insertChord(b.dataset.c);};
+  setTarget(lastFocusSec);
+  $("palTarget").onchange=e=>setTarget(Number(e.target.value));
+  if(padOpen)bindPad();
+}
+
+/* chord input from the fretboard (reverse lookup) */
+let padOpen=false,padDraft=null,padName="",padPick=0;
+function resetPad(){padDraft={frets:[-1,-1,-1,-1,-1,-1],fingers:[0,0,0,0,0,0],barreOn:false};padName="";padPick=0;}
+if(!padDraft)resetPad();
+function bindPad(){
+  const d=padDraft;
+  bindBoard($("pBoard"),d,()=>{padName="";padPick=0;$("pBoard").innerHTML=boardInnerHTML(d);renderPadResult();});
+  $("pBarre").onchange=e=>{d.barreOn=e.target.checked;$("pBoard").innerHTML=boardInnerHTML(d);renderPadResult();};
+  $("pClear").onclick=()=>{resetPad();renderPalette();};
+  $("pPlay").onclick=()=>strum(d.frets);
+  renderPadResult();
+}
+function padNote(t,ok){const el=$("pStatus");if(el){el.textContent=t;el.className="status"+(ok?" ok":"");}toast(t,ok);}
+function renderPadResult(){
+  const d=padDraft,el=$("pRes");if(!el)return;
+  const cands=detectChords(d.frets);
+  const sec=draft&&draft.sections[Math.min(lastFocusSec,draft.sections.length-1)];
+  if(!cands.length&&d.frets.some(f=>f>=0)){
+    el.innerHTML=`<div class="pad-grid"><div>${diagramSVG(draftDiagram(d),1.2)}</div><div class="pad-main">
+      <p class="hint">この音の組み合わせに合うコード名が見つかりませんでした。名前を入力して入れることもできます。</p>
+      <div class="pad-act"><input id="pName" value="${esc(padName)}" placeholder="コード名" aria-label="入力するコード名" autocapitalize="off" spellcheck="false">
+      <button class="btn primary" id="pInsert">「${esc(sec?sec.name:"セクション")}」に入力</button></div><span class="status" id="pStatus"></span></div></div>`;
+    $("pName").oninput=e=>{padName=e.target.value;};
+    $("pInsert").onclick=()=>{const n=padName.trim();if(!n)return;
+      draft.voicings=Object.assign({},draft.voicings||{},{[n]:{frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null}});
+      insertChord(n);padNote(`${n} を入力しました`,true);btnDone($("pInsert"),"✓ 入力しました");};
+    return;}
+  if(!cands.length){
+    el.innerHTML=`<p class="hint">鳴らす弦の押さえる位置をタップすると、コード名の候補が出ます。最初は全弦ミュート（×）なので、開放弦は左端の × を ○ に切り替えてください。</p>`;return;}
+  if(padPick>=cands.length)padPick=0;
+  const pick=cands[padPick];
+  if(!padName)padName=pick.name;
+  const ivs=intervalsOf(d.frets,pick.root);
+  el.innerHTML=`<div class="pad-grid">
+    <div>${diagramSVG(draftDiagram(d),1.2)}</div>
+    <div class="pad-main">
+      <div class="lbl-s">コード名の候補</div>
+      <div class="cands">${cands.map((c,k)=>`<button class="c${k===padPick?" on":""}" data-pk="${k}">${esc(c.name)}<small>${esc(roman(c.name,draft.key))}${c.omit?" ・5度省略":""}</small></button>`).join("")}</div>
+      <div class="code">構成音 ${ivs.map(x=>`<b>${esc(x.n)}</b><span class="ivl">${esc(x.iv)}</span>`).join(" ")}</div>
+      <div class="pad-act">
+        <input id="pName" value="${esc(padName)}" aria-label="入力するコード名" autocapitalize="off" spellcheck="false">
+        <button class="btn primary" id="pInsert">「${esc(sec?sec.name:"セクション")}」に入力</button>
+        ${canWrite?`<button class="btn small" id="pSave">この押さえ方をマイコードに保存</button>`:""}
+      </div>
+      <span class="status" id="pStatus"></span>
+    </div></div>`;
+  el.querySelectorAll("[data-pk]").forEach(b=>b.onclick=()=>{padPick=Number(b.dataset.pk);padName=cands[padPick].name;renderPadResult();});
+  $("pName").oninput=e=>{padName=e.target.value;};
+  $("pInsert").onclick=()=>{const n=padName.trim();if(!n)return;
+    // remember this exact fingering for the song so the chart shows it
+    draft.voicings=Object.assign({},draft.voicings||{},{[n]:{frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null}});
+    insertChord(n);
+    padNote(`「${draft.sections[lastFocusSec].name}」に ${n} を入力しました`,true);btnDone($("pInsert"),"✓ 入力しました");};
+  const sv=$("pSave");if(sv)sv.onclick=async()=>{
+    const n=padName.trim();if(!n)return;
+    const obj={id:uid(),name:n,frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null,memo:draft&&draft.title?`「${draft.title}」で入力`:"",updatedAt:Date.now()};
+    shapes.push(obj);
+    btnBusy(sv);
+    try{await store.saveShape(obj);padNote(`マイコードに ${n} を保存しました`,true);btnDone($("pSave")||sv,"✓ 保存しました");}
+    catch(e){shapes=shapes.filter(x=>x.id!==obj.id);padNote("保存できませんでした",false);btnDone($("pSave")||sv,"保存できませんでした",false);}
+  };
+}
+function insertChord(c){
+  const i=Math.min(lastFocusSec,draft.sections.length-1);if(i<0)return;
+  const ta=$("secBars"+i);if(!ta)return;
+  // a section never clicked into gets the chord appended at its end
+  const atEnd=!touchedSecs.has(i);
+  const st=atEnd?ta.value.length:(ta.selectionStart??ta.value.length);
+  const en=atEnd?ta.value.length:(ta.selectionEnd??ta.value.length);
+  const before=ta.value.slice(0,st),after=ta.value.slice(en);
+  const ins=(before&&!/\s$/.test(before)?" ":"")+c+" ";
+  ta.value=before+ins+after;const p=st+ins.length;
+  try{ta.setSelectionRange(p,p);}catch(e){}
+  touchedSecs.add(i);
+  ta.dispatchEvent(new Event("input",{bubbles:true}));
+  const ps=$("palStatus");if(ps){ps.textContent=`「${draft.sections[i].name}」に ${c} を入力`;ps.className="status ok";}
+  toast(`「${draft.sections[i].name}」に ${c} を入力`,true);
+  if(!["|","%","/","[","]"].includes(c))lastInserted=c;
+  updateAgain();
+  const pv=$("pv"+i);if(pv){pv.classList.remove("flash");void pv.offsetWidth;pv.classList.add("flash");}
+}
+/* undo history for the song editor: one step per action, typing bursts merged */
+let undoStack=[],redoStack=[],lastSnap=null,lastPush=0,lastWasTyping=false;
+function resetHistory(){undoStack=[];redoStack=[];lastSnap=draft?JSON.stringify(draft):null;lastPush=0;lastWasTyping=false;}
+function recordHistory(typing){
+  const now=Date.now();const cur=JSON.stringify(draft);
+  if(lastSnap!==null&&cur!==lastSnap){
+    if(!(typing&&lastWasTyping&&now-lastPush<1000)){undoStack.push(lastSnap);if(undoStack.length>200)undoStack.shift();}
+    redoStack=[];lastPush=now;lastWasTyping=!!typing;
+  }
+  lastSnap=cur;updateUndoButtons();
+}
+function updateUndoButtons(){const u=$("undoBtn"),r=$("redoBtn");if(u)u.disabled=!undoStack.length;if(r)r.disabled=!redoStack.length;}
+function restore(snap){
+  const keep={focus:lastFocusSec,y:window.scrollY};
+  draft=JSON.parse(snap);lastSnap=snap;lastWasTyping=false;
+  renderEditor();setTarget(Math.min(keep.focus,draft.sections.length-1));window.scrollTo(0,keep.y);
+  dirty=true;clearTimeout(saveTimer);saveTimer=setTimeout(flush,500);
+  const it=document.querySelector(`.item[data-id="${CSS.escape(current)}"] .t`);if(it)it.textContent=draft.title||"無題";
+  updateUndoButtons();
+}
+function undo(){if(!draft||!undoStack.length){toast("これ以上戻せません",false);return;}
+  redoStack.push(JSON.stringify(draft));restore(undoStack.pop());toast("1つ元に戻しました",true);}
+function redo(){if(!draft||!redoStack.length){toast("やり直せる操作がありません",false);return;}
+  undoStack.push(JSON.stringify(draft));restore(redoStack.pop());toast("やり直しました",true);}
+document.addEventListener("keydown",e=>{
+  if(tab!=="songs"||mode!=="edit"||!draft||!(e.metaKey||e.ctrlKey)||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k==="z"){e.preventDefault();e.shiftKey?redo():undo();}
+  else if(k==="y"&&e.ctrlKey){e.preventDefault();redo();}
+});
+function markDirty(typing){recordHistory(typing);dirty=true;setStatus("編集中…",false,true);clearTimeout(saveTimer);saveTimer=setTimeout(flush,700);
+  const it=document.querySelector(`.item[data-id="${CSS.escape(current)}"] .t`);if(it)it.textContent=draft.title||"無題";}
+async function flush(){
+  clearTimeout(saveTimer);if(!dirty||!draft)return;dirty=false;
+  draft.updatedAt=Date.now();const copy=JSON.parse(JSON.stringify(draft));
+  const s=songs.find(x=>x.id===copy.id);if(s)Object.assign(s,copy);
+  try{await store.save(copy);setStatus("保存しました",true,true);}catch(e){dirty=true;setStatus(e&&e.code==="quota_exceeded"?"保存容量の上限です。不要な曲を削除してください":"保存できませんでした。もう一度編集すると再試行します");}
+}
+window.addEventListener("beforeunload",()=>{if(dirty)flush();});
+
+/* ---------- my chord shapes ---------- */
+const OPEN_PC=[4,9,2,7,11,4];          // E A D G B E
+const OPEN_SEMI=[0,5,10,15,19,24];     // semitones above low E (E2)
+const FINGERS=["","1","2","3","4","T"];
+// [suffix, intervals, penalty] — penalty ranks omitted-5th and rarer readings lower
+const QUALS=[["",[0,4,7],0],["m",[0,3,7],0],["7",[0,4,7,10],0],["maj7",[0,4,7,11],0],["m7",[0,3,7,10],0],["sus4",[0,5,7],0],["sus2",[0,2,7],.1],
+  ["dim",[0,3,6],0],["aug",[0,4,8],0],["6",[0,4,7,9],.05],["m6",[0,3,7,9],.05],["add9",[0,2,4,7],0],["madd9",[0,2,3,7],0],["m7b5",[0,3,6,10],0],
+  ["dim7",[0,3,6,9],0],["9",[0,2,4,7,10],0],["maj9",[0,2,4,7,11],0],["m9",[0,2,3,7,10],0],["7sus4",[0,5,7,10],0],["5",[0,7],0],["mM7",[0,3,7,11],0],
+  ["7(♭9)",[0,1,4,7,10],0],["7(♯9)",[0,3,4,7,10],.05],["7(13)",[0,4,7,9,10],0],["7(♭13)",[0,4,7,8,10],0],["7(♯11)",[0,4,6,7,10],0],
+  ["6/9",[0,2,4,7,9],0],["m7(11)",[0,3,5,7,10],0],["add11",[0,4,5,7],.05],["aug7",[0,4,8,10],0],["7♭5",[0,4,6,10],.05],["9sus4",[0,2,5,7,10],0],
+  ["m6/9",[0,2,3,7,9],0],["maj7(♯11)",[0,4,6,7,11],0],["11",[0,2,4,5,7,10],.1],["13",[0,2,4,7,9,10],.1],
+  ["7",[0,4,10],.3],["maj7",[0,4,11],.3],["m7",[0,3,10],.3],["9",[0,2,4,10],.3],["7(13)",[0,4,9,10],.35],["maj9",[0,2,4,11],.3],["m9",[0,2,3,10],.3]];
+const IVL=["R","♭9","9","m3","3","11","♭5","5","♯5","6","m7","M7"];
+function pcOf(i,f){return f<0?null:(OPEN_PC[i]+f)%12;}
+function detectChords(frets){
+  const pcs=[];let bass=null;
+  frets.forEach((f,i)=>{const p=pcOf(i,f);if(p===null)return;if(bass===null)bass=p;if(!pcs.includes(p))pcs.push(p);});
+  if(pcs.length<2)return [];
+  const out=[],seen=new Set();
+  pcs.forEach(r=>{const set=pcs.map(p=>(p-r+12)%12).sort((a,b)=>a-b).join(",");
+    QUALS.forEach(([q,iv,pen])=>{if(iv.slice().sort((a,b)=>a-b).join(",")!==set)return;
+      const name=SHARP[r]+q+(bass!==r?"/"+SHARP[bass]:"");if(seen.has(name))return;seen.add(name);
+      out.push({name,root:r,omit:pen>=.3,score:(bass===r?0:1)+pen+iv.length*0.01});});});
+  return out.sort((a,b)=>a.score-b.score).slice(0,5);
+}
+function detectNames(frets){return detectChords(frets).map(x=>x.name);}
+function intervalsOf(frets,root){
+  const seen=[];frets.forEach((f,i)=>{const p=pcOf(i,f);if(p!==null&&!seen.includes(p))seen.push(p);});
+  return seen.map(p=>({n:SHARP[p],iv:IVL[(p-root+12)%12]})).sort((a,b)=>IVL.indexOf(a.iv)-IVL.indexOf(b.iv));
+}
+function computeBarre(fr){
+  const pos=fr.filter(f=>f>0);if(!pos.length)return null;
+  const fret=Math.min(...pos);const from=fr.indexOf(fret);let to=from;
+  for(let i=from;i<6&&fr[i]>=fret;i++)if(fr[i]===fret)to=i;
+  return to>from?{fret,from,to}:null;
+}
+function toDiagram(m){const b=m.barre;return {frets:m.frets,fingers:m.fingers,barre:b?b.fret:0,bFrom:b?b.from:0,bTo:b?b.to:0};}
+/* ---------- voicing finder ---------- */
+function normQual(q){
+  return String(q||"").replace(/Maj|MAJ|M(?=7|9|11|13)|△/g,"maj").replace(/min/g,"m").replace(/ø/g,"m7♭5")
+    .replace(/[°o](?=7|$)/g,"dim").replace(/^\+|aug/g,"aug").replace(/(^|[^0-9])-5|b5/g,"$1♭5").replace(/#5|\+5/g,"♯5")
+    .replace(/b9/g,"♭9").replace(/#9/g,"♯9").replace(/#11/g,"♯11").replace(/b13/g,"♭13").replace(/^sus$/,"sus4")
+    .replace(/[()]/g,"").replace(/\s+/g,"");
+}
+function qualityIntervals(q){
+  const omits=[];
+  let s=String(q||"").replace(/\(?\s*omit\s*(\d+)\s*\)?/gi,(m,d)=>{omits.push(d);return "";});
+  s=normQual(s);
+  const hit=QUALS.find(([qq,iv,pen])=>pen<.3&&normQual(qq)===s);
+  let iv;
+  if(hit)iv=hit[1].slice();
+  else{
+    iv=/^m(?!aj)/.test(s)?[0,3,7]:[0,4,7];
+    if(/sus4/.test(s))iv=[0,5,7];else if(/sus2/.test(s))iv=[0,2,7];
+    if(/dim/.test(s))iv=[0,3,6];if(/aug|♯5/.test(s))iv=iv.map(x=>x===7?8:x);if(/♭5/.test(s))iv=iv.map(x=>x===7?6:x);
+    if(/maj(7|9|11|13)/.test(s))iv.push(11);else if(/7|9|11|13/.test(s))iv.push(10);
+    if(/9/.test(s)&&!/♭9|♯9/.test(s))iv.push(2);if(/♭9/.test(s))iv.push(1);if(/♯9/.test(s))iv.push(3);
+    if(/6/.test(s))iv.push(9);if(/♯11/.test(s))iv.push(6);else if(/11/.test(s))iv.push(5);if(/13/.test(s))iv.push(9);
+  }
+  const drop={"3":[3,4],"5":[6,7,8],"1":[0]};
+  omits.forEach(d=>{(drop[d]||[]).forEach(x=>{iv=iv.filter(y=>y!==x);});});
+  return [...new Set(iv)];
+}
+const vcache={};
+function voicingsFor(name){
+  if(vcache[name])return vcache[name];
+  const m=CHORD_RE.exec(name);if(!m)return vcache[name]=[];
+  const root=IDX[m[1]],iv=qualityIntervals(m[2]);
+  const pcs=[...new Set(iv.map(x=>(root+x)%12))];
+  const bass=m[3]?IDX[m[3]]:(iv.includes(0)?root:null);
+  if(bass!==null&&!pcs.includes(bass))pcs.push(bass);
+  const fifth=(root+7)%12;
+  const required=pcs.filter(p=>!(p===fifth&&pcs.length>=4));
+  const res=new Map();
+  const evaluate=(fr)=>{
+    const sounding=[];for(let i=0;i<6;i++)if(fr[i]>=0)sounding.push(i);
+    if(sounding.length<4)return;
+    const first=sounding[0],last=sounding[sounding.length-1];
+    let inner=0;for(let i=first;i<=last;i++)if(fr[i]<0)inner++;
+    if(inner>1||5-last>1)return;
+    if(bass!==null&&pcOf(first,fr[first])!==bass)return;
+    const have=new Set(sounding.map(i=>pcOf(i,fr[i])));
+    for(const p of required)if(!have.has(p))return;
+    const fretted=fr.filter(f=>f>0);
+    let pos=0,span=0;
+    if(fretted.length){const mn=Math.min(...fretted),mx=Math.max(...fretted);span=mx-mn;if(span>3)return;pos=mn;
+      if(fretted.length>4){const b0=fr.indexOf(mn);if(fr.slice(b0).some(f=>f===0))return;
+        if(fretted.length-fr.filter(f=>f===mn).length>3)return;}}
+    const key=fr.join(",");if(res.has(key))return;
+    let score=sounding.length*2-inner*3-(5-last)*2-pos*0.12-span*0.5;
+    if(fr.some(f=>f===0)&&fretted.length&&Math.max(...fretted)>4)return; // open strings only with low-position shapes
+    res.set(key,{frets:fr,pos,score});
+  };
+  for(let p=0;p<=12;p++){
+    const opts=[];
+    for(let st=0;st<6;st++){const o=[-1];if(pcs.includes(OPEN_PC[st]))o.push(0);
+      for(let f=Math.max(1,p);f<=p+3&&f<=15;f++)if(pcs.includes((OPEN_PC[st]+f)%12))o.push(f);opts.push(o);}
+    const cur=[0,0,0,0,0,0];
+    const rec=(st)=>{if(st===6){evaluate(cur.slice());return;}for(const f of opts[st]){cur[st]=f;rec(st+1);}};
+    rec(0);
+  }
+  const all=[...res.values()].sort((a,b)=>b.score-a.score);
+  const perPos={},pick=[];
+  for(const v of all){perPos[v.pos]=(perPos[v.pos]||0)+1;if(perPos[v.pos]<=2)pick.push(v);}
+  const out=pick.sort((a,b)=>a.pos-b.pos||b.score-a.score).slice(0,14).map(v=>{
+    const fretted=v.frets.filter(f=>f>0);
+    return {frets:v.frets,fingers:[],barre:fretted.length>4?computeBarre(v.frets):null,pos:v.pos};});
+  return vcache[name]=out;
+}
+/* the shape a chart shows: this song's choice, then My Chords, then the standard shape */
+function effectiveShape(voicings,c){
+  const v=voicings&&voicings[c];
+  if(v&&Array.isArray(v.frets))return toDiagram(v);
+  const mine=shapes.find(x=>x.name===c);if(mine)return toDiagram(mine);
+  const std=shapeFor(c);if(std&&!std.approx)return std;
+  const g=voicingsFor(c)[0];return g?toDiagram(g):std;
+}
+let vOpen=null,vlTimer=null;
+function songChords(d){
+  const out=[];
+  (d.sections||[]).forEach(sec=>parseBars(sec.bars).forEach(b=>b.forEach(c=>{if(c!=="%"&&c!=="/"&&CHORD_RE.test(c)&&!out.includes(c))out.push(c);})));
+  return out;
+}
+function renderVoicingList(){
+  const el=$("vlist");if(!el||!draft)return;
+  const list=songChords(draft);
+  if(vOpen&&!list.includes(vOpen))vOpen=null;
+  el.innerHTML=list.length?list.map(c=>{const sh=effectiveShape(draft.voicings,c);const chosen=!!(draft.voicings&&draft.voicings[c]);
+    return `<button class="vitem${c===vOpen?" on":""}" data-vc="${esc(c)}" aria-expanded="${c===vOpen}"><span class="nm">${esc(c)}</span>${sh?diagramSVG(sh,0.62):`<span class="none">形なし</span>`}<span class="vs">${chosen?"選択済み":"標準"}</span></button>`;}).join("")
+    :`<p class="note">まだコードが入っていません。</p>`;
+  el.onclick=e=>{const b=e.target.closest("[data-vc]");if(!b)return;vOpen=vOpen===b.dataset.vc?null:b.dataset.vc;renderVoicingList();};
+  renderVoicePicker();
+}
+function renderVoicePicker(){
+  const el=$("vpick");if(!el)return;
+  if(!vOpen){el.innerHTML="";return;}
+  const c=vOpen;
+  const cur=effectiveShape(draft.voicings,c);const curKey=cur?cur.frets.join(","):"";
+  const opts=[];const seen=new Set();
+  const add=(label,obj)=>{if(!obj)return;const k=obj.frets.join(",");if(seen.has(k))return;seen.add(k);opts.push({label,obj});};
+  const std=shapeFor(c);if(std&&!std.approx)add("標準",{frets:std.frets,fingers:[],barre:std.barre?{fret:std.barre,from:std.bFrom,to:std.bTo}:null});
+  shapes.filter(x=>x.name===c).forEach(x=>add("マイコード",x));
+  voicingsFor(c).forEach(v=>add(v.pos===0?"開放":`${v.pos}フレット`,v));
+  if(draft.voicings&&draft.voicings[c])add("入力した形",draft.voicings[c]);
+  el.innerHTML=`<div class="vpick"><div class="vhead"><b>${esc(c)}</b> の形 <span class="note">${opts.length}通り・タップで選択（音も鳴ります）</span>
+      ${draft.voicings&&draft.voicings[c]?`<button class="btn small" id="vReset">標準に戻す</button>`:""}</div>
+    ${opts.length?`<div class="vgrid">${opts.map((o,k)=>`<button class="vopt${o.obj.frets.join(",")===curKey?" on":""}" data-vk="${k}"><span class="vl">${esc(o.label)}</span>${diagramSVG(toDiagram(o.obj),0.85)}<span class="code">${esc(fretCode(o.obj.frets))}</span></button>`).join("")}</div>`
+      :`<p class="note">このコード名から形を見つけられませんでした。「＋ コードを入力」から指板で入力できます。</p>`}</div>`;
+  el.querySelectorAll("[data-vk]").forEach(b=>b.onclick=()=>{const o=opts[Number(b.dataset.vk)].obj;
+    draft.voicings=Object.assign({},draft.voicings||{},{[c]:{frets:o.frets.slice(),fingers:(o.fingers||[]).slice(),barre:o.barre||null}});
+    strum(o.frets);markDirty();renderVoicingList();toast(`${c} の形を選びました`,true);});
+  const r=$("vReset");if(r)r.onclick=()=>{const v=Object.assign({},draft.voicings);delete v[c];draft.voicings=v;markDirty();renderVoicingList();toast(`${c} を標準の形に戻しました`,true);};
+}
+let audioCtx=null;
+function strum(frets){
+  try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();}catch(e){return;}
+  const t0=audioCtx.currentTime+0.02;let k=0;
+  frets.forEach((f,i)=>{if(f<0)return;
+    const freq=82.41*Math.pow(2,(OPEN_SEMI[i]+f)/12),t=t0+k*0.04;k++;
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain(),lp=audioCtx.createBiquadFilter();
+    o.type="triangle";o.frequency.value=freq;lp.type="lowpass";lp.frequency.value=2400;
+    g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.18,t+0.008);g.gain.exponentialRampToValueAtTime(0.0001,t+2.2);
+    o.connect(lp).connect(g).connect(audioCtx.destination);o.start(t);o.stop(t+2.3);});
+}
+
+function renderShapeList(){
+  const q=$("search").value.trim().toLowerCase();
+  const items=sortedShapes().filter(s=>!q||(s.name||"").toLowerCase().includes(q)||(s.memo||"").toLowerCase().includes(q));
+  $("list").innerHTML=items.length?items.map(s=>`<button class="item${s.id===currentShape?" on":""}" data-sid="${esc(s.id)}">
+    <span style="min-width:0"><span class="t">${esc(s.name||"名前なし")}</span><span class="a">${esc(s.memo||"—")}</span></span>
+    <span class="frets">${esc(fretCode(s.frets||[]))}</span></button>`).join("")
+    :`<div class="note">${q?"一致する形がありません。":"まだ登録した形がありません。「＋ 形を登録」から指板をタップして記録できます。"}</div>`;
+  $("newBtn").hidden=!canWrite;
+}
+function openShape(id){
+  const s=shapes.find(x=>x.id===id);if(!s)return;
+  currentShape=id;confirmShapeDel=false;
+  shapeDraft={id:s.id,name:s.name||"",frets:(s.frets||[0,0,0,0,0,0]).slice(),fingers:(s.fingers||["","","","","",""]).map(x=>Math.max(0,FINGERS.indexOf(String(x||"")))),barreOn:!!s.barre,memo:s.memo||""};
+  shapeStart=windowStart(shapeDraft.frets);renderShapeMain();
+}
+function newShape(name,built){
+  tab="shapes";currentShape=null;confirmShapeDel=false;
+  shapeDraft={id:null,name:name||"",frets:built?built.frets.slice():[0,0,0,0,0,0],fingers:[0,0,0,0,0,0],barreOn:!!(built&&built.barre),memo:""};
+  shapeStart=windowStart(shapeDraft.frets);renderShapeMain();
+}
+function renderShapeMain(){
+  const main=$("main");
+  if(!shapeDraft){
+    main.innerHTML=`<div class="welcome"><h1>マイコード</h1>
+      <p class="note">押さえ方を自分で記録できます。指板のマスをタップして押さえる位置を入力し、開放・ミュート、指番号、セーハを設定します。登録した形は曲のダイアグラムと入力パレットに表示されます。</p>
+      ${canWrite?`<button class="btn primary" id="wShape">＋ 形を登録する</button>`:""}
+      ${shapes.length?`<p class="note">左の一覧から登録済みの形を開けます。</p>`:""}</div>`;
+    const w=$("wShape");if(w)w.onclick=()=>{newShape("",null);renderList();};return;
+  }
+  const d=shapeDraft;
+  main.innerHTML=`<div class="sheet">
+    <div class="toolbar"><div class="grp"><span class="lbl-s">${d.id?"登録済みの形を編集":"新しい形"}</span></div>
+      <div class="grp"><button class="btn small" id="sPlay">♪ 鳴らす</button><span class="status" id="status"></span></div></div>
+    <div class="shape-ed">
+      <div class="board-wrap">
+        <div class="board-ctl">
+          <label><input type="checkbox" id="sBarre" ${d.barreOn?"checked":""}> セーハ</label>
+          <button class="btn small" id="sClear">リセット</button>
+        </div>
+        <div class="board-scroll"><div class="board" id="board"></div></div>
+        <p class="hint">マスをタップすると押さえる位置、もう一度タップで解除。左端の ○ / × で開放とミュートを切り替え、右端の欄で指番号を選びます。上が1弦、下が6弦です。</p>
+      </div>
+      <div class="side">
+        <div class="big-dg" id="bigdg"></div>
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+          <div class="f"><label for="sName">コード名</label><input id="sName" value="${esc(d.name)}" placeholder="例：C/E、Gadd9" autocapitalize="off" spellcheck="false"></div>
+          <div class="cands" id="cands"></div>
+          <div class="f"><label for="sMemo">メモ（どの曲で使うか、押さえるコツなど）</label><textarea id="sMemo">${esc(d.memo)}</textarea></div>
+        </div>
+        ${canWrite?`<div class="grp full" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn primary" id="sSave">${d.id?"変更を保存":"この形を登録"}</button>
+          ${d.id?(confirmShapeDel?`<span class="note">この形を削除しますか？</span><button class="btn small danger" id="sDelYes">削除する</button><button class="btn small" id="sDelNo">やめる</button>`
+            :`<button class="btn small danger" id="sDel">削除</button>`):""}
+          ${d.id?`<button class="btn small" id="sCopy">別の形として複製</button>`:""}</div>`:""}
+        <div id="sameName" class="full"></div>
+      </div>
+    </div></div>`;
+  renderBoard();bindShapeEditor();
+}
+function renderBoard(){
+  const d=shapeDraft;
+  $("board").innerHTML=boardInnerHTML(d);
+  shapeSidePanels();
+}
+function boardInnerHTML(d){
+  const FR=12;
+  const barre=d.barreOn?computeBarre(d.frets):null;
+  // header: string-number col, toggle col, nut col, frets 1-12 with inlay marks, finger col, note col
+  let h=`<span class="hd"></span><span class="hd"></span><span class="hd"></span>`;
+  for(let fr=1;fr<=FR;fr++)h+=`<span class="hd${fr===12?" inlay2":[3,5,7,9].includes(fr)?" inlay":""}">${fr}</span>`;
+  h+=`<span class="hd">指</span><span class="hd">音</span>`;
+  for(let i=5;i>=0;i--){const f=d.frets[i];
+    h+=`<span class="sn">${6-i}弦</span>`;
+    h+=`<button class="top ${f===0?"open":f<0?"mute":""}" data-top="${i}" aria-label="${6-i}弦 開放/ミュート">${f===0?"○":f<0?"×":"·"}</button>`;
+    h+=`<span class="nut"></span>`;
+    for(let fr=1;fr<=FR;fr++){const on=f===fr;const inbar=barre&&barre.fret===fr&&i>=barre.from&&i<=barre.to;
+      h+=`<button class="cell${f<0?" muted":""}${inbar?" inbar":""}${inbar&&i===barre.to?" btop":""}${inbar&&i===barre.from?" bbot":""}" data-s="${i}" data-f="${fr}" aria-label="${6-i}弦 ${fr}フレット" aria-pressed="${on}">${on?`<span class="dot">${esc(FINGERS[d.fingers[i]]||"")}</span>`:""}</button>`;}
+    h+=`<select class="fsel" data-fg="${i}" aria-label="${6-i}弦の指" ${f<=0?"disabled":""}>${FINGERS.map((x,k)=>`<option value="${k}" ${Number(d.fingers[i])===k?"selected":""}>${x||"–"}</option>`).join("")}</select>`;
+    const p=pcOf(i,f);h+=`<span class="pn">${p===null?"–":SHARP[p]}</span>`;
+  }
+  return h;
+}
+function bindBoard(el,d,onChange){
+  el.addEventListener("click",e=>{
+    const t=e.target.closest("[data-top]");
+    if(t){const i=Number(t.dataset.top);d.frets[i]=d.frets[i]<0?0:-1;if(d.frets[i]<=0)d.fingers[i]=0;onChange();return;}
+    const c=e.target.closest(".cell");if(!c)return;
+    const i=Number(c.dataset.s),f=Number(c.dataset.f);
+    if(d.frets[i]===f){d.frets[i]=0;d.fingers[i]=0;}else d.frets[i]=f;
+    onChange();
+  });
+  el.addEventListener("change",e=>{const s=e.target.closest("[data-fg]");if(!s)return;d.fingers[Number(s.dataset.fg)]=Number(s.value);onChange();});
+}
+function draftDiagram(d){return toDiagram({frets:d.frets,fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null});}
+function shapeSidePanels(){
+  const d=shapeDraft;
+  // preview, code and name candidates
+  const dg=draftDiagram(d);
+  const pcs=[...new Set(d.frets.map((f,i)=>pcOf(i,f)).filter(p=>p!==null))].map(p=>SHARP[p]);
+  $("bigdg").innerHTML=`<div>${diagramSVG(dg,1.6)}</div><div style="display:flex;flex-direction:column;gap:6px">
+    <span class="nm">${esc(d.name||"名前なし")}</span>
+    <span class="code">押さえ方 <b>${esc(fretCode(d.frets))}</b></span>
+    <span class="code">構成音 <b>${esc(pcs.join(" ")||"—")}</b></span></div>`;
+  const c=detectNames(d.frets);
+  $("cands").innerHTML=c.length?`<span class="lbl-s">名前の候補</span>`+c.map(n=>`<button class="c" data-cand="${esc(n)}">${esc(n)}</button>`).join(""):"";
+  const same=shapes.filter(s=>s.name&&s.name===d.name&&s.id!==d.id);
+  $("sameName").innerHTML=same.length?`<div class="lbl-s" style="margin-bottom:6px">同じ名前で登録済みの形</div><div class="dgrid">${same.map(s=>`<div class="dg"><span class="nm" style="font-size:16px">${esc(fretCode(s.frets))}</span>${diagramSVG(toDiagram(s))}<button class="reg" data-open="${esc(s.id)}">開く</button></div>`).join("")}</div>`:"";
+}
+function shapeChanged(){setStatus("未保存の変更があります",false,true);renderBoard();}
+function bindShapeEditor(){
+  const d=shapeDraft;
+  bindBoard($("board"),d,shapeChanged);
+  $("sBarre").onchange=e=>{d.barreOn=e.target.checked;shapeChanged();};
+  $("sClear").onclick=()=>{d.frets=[0,0,0,0,0,0];d.fingers=[0,0,0,0,0,0];d.barreOn=false;$("sBarre").checked=false;shapeChanged();};
+  $("sName").addEventListener("input",e=>{d.name=e.target.value;setStatus("未保存の変更があります",false,true);renderBoard();});
+  $("sMemo").addEventListener("input",e=>{d.memo=e.target.value;setStatus("未保存の変更があります",false,true);});
+  $("cands").addEventListener("click",e=>{const b=e.target.closest("[data-cand]");if(!b)return;d.name=b.dataset.cand;$("sName").value=d.name;setStatus("未保存の変更があります",false,true);renderBoard();});
+  $("sameName").addEventListener("click",e=>{const b=e.target.closest("[data-open]");if(b){openShape(b.dataset.open);renderList();}});
+  $("sPlay").onclick=()=>strum(d.frets);
+  const sv=$("sSave");if(sv)sv.onclick=saveShape;
+  const del=$("sDel");if(del)del.onclick=()=>{confirmShapeDel=true;renderShapeMain();};
+  const no=$("sDelNo");if(no)no.onclick=()=>{confirmShapeDel=false;renderShapeMain();};
+  const yes=$("sDelYes");if(yes)yes.onclick=async()=>{const id=d.id;shapes=shapes.filter(x=>x.id!==id);shapeDraft=null;currentShape=null;confirmShapeDel=false;
+    renderList();renderShapeMain();try{await store.removeShape(id);toast("形を削除しました",true);}catch(e){toast("削除できませんでした",false);}};
+  const cp=$("sCopy");if(cp)cp.onclick=()=>{d.id=null;currentShape=null;renderList();renderShapeMain();setStatus("複製しました。登録するまで保存されません");};
+}
+async function saveShape(){
+  const d=shapeDraft;const name=d.name.trim();
+  if(!name){setStatus("コード名を入力してください");$("sName").focus();return;}
+  if(d.frets.every(f=>f<0)){setStatus("少なくとも1本は鳴らす弦が必要です");return;}
+  const obj={id:d.id||uid(),name,frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null,memo:d.memo.trim(),updatedAt:Date.now()};
+  const wasNew=!d.id;d.id=obj.id;d.name=name;currentShape=obj.id;
+  const i=shapes.findIndex(x=>x.id===obj.id);if(i>=0)shapes[i]=obj;else shapes.push(obj);
+  renderList();if(wasNew)renderShapeMain();
+  btnBusy($("sSave"));
+  try{await store.saveShape(obj);setStatus(wasNew?"登録しました":"保存しました",true);btnDone($("sSave"),wasNew?"✓ 登録しました":"✓ 保存しました");}
+  catch(e){setStatus(e&&e.code==="quota_exceeded"?"保存容量の上限です。不要な形を削除してください":"保存できませんでした。もう一度お試しください");btnDone($("sSave"),"保存できませんでした",false);}
+}
+
+/* ---------- PDF export: draw the chart on A4 canvases, then wrap them in a PDF ---------- */
+let jspdfLoading=null;
+function loadJsPdf(){
+  if(window.jspdf&&window.jspdf.jsPDF)return Promise.resolve(window.jspdf.jsPDF);
+  if(!jspdfLoading)jspdfLoading=new Promise((res,rej)=>{const sc=document.createElement("script");
+    sc.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    sc.onload=()=>window.jspdf&&window.jspdf.jsPDF?res(window.jspdf.jsPDF):rej(new Error("jspdf"));
+    sc.onerror=()=>{jspdfLoading=null;rej(new Error("load"));};document.head.appendChild(sc);});
+  return jspdfLoading;
+}
+const PDF={W:1654,H:2339,M:120,ink:"#1B2430",muted:"#5E6A78",line:"#C9D0D8",accent:"#A8561A",
+  chord:'"Barlow Condensed","Arial Narrow",sans-serif',body:'"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif',mono:'"IBM Plex Mono",Menlo,monospace'};
+function pdfDiagram(ctx,shape,x,y,sc){
+  const x0=21,dx=11,y0=24,dy=14,N=5,start=windowStart(shape.frets),fg=shape.fingers||[];
+  ctx.save();ctx.translate(x,y);ctx.scale(sc,sc);ctx.lineWidth=1;ctx.strokeStyle=PDF.muted;
+  for(let i=0;i<6;i++){ctx.beginPath();ctx.moveTo(x0+i*dx,y0);ctx.lineTo(x0+i*dx,y0+N*dy);ctx.stroke();}
+  for(let j=0;j<=N;j++){ctx.beginPath();ctx.moveTo(x0,y0+j*dy);ctx.lineTo(x0+5*dx,y0+j*dy);ctx.stroke();}
+  ctx.fillStyle=PDF.ink;
+  if(start===1)ctx.fillRect(x0-1,y0-3,5*dx+2,4);
+  else{ctx.fillStyle=PDF.ink;ctx.font=`700 13px ${PDF.chord}`;ctx.textAlign="right";ctx.fillText(String(start),x0-4,y0+dy*0.5+4.5);}
+  ctx.textAlign="center";
+  if(shape.barre&&shape.barre>=start){const by=y0+(shape.barre-start+0.5)*dy;ctx.fillStyle=PDF.ink;
+    const bx=x0+shape.bFrom*dx-4,bw=(shape.bTo-shape.bFrom)*dx+8;ctx.beginPath();ctx.moveTo(bx+4,by-4);ctx.arcTo(bx+bw,by-4,bx+bw,by+4,4);ctx.arcTo(bx+bw,by+4,bx,by+4,4);ctx.arcTo(bx,by+4,bx,by-4,4);ctx.arcTo(bx,by-4,bx+bw,by-4,4);ctx.fill();}
+  shape.frets.forEach((f,i)=>{const cx=x0+i*dx;
+    if(f<0){ctx.fillStyle=PDF.muted;ctx.font=`9px ${PDF.body}`;ctx.fillText("×",cx,y0-7);}
+    else if(f===0){ctx.strokeStyle=PDF.muted;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(cx,y0-10,3,0,Math.PI*2);ctx.stroke();}
+    else if(!(shape.barre&&f===shape.barre&&i>=shape.bFrom&&i<=shape.bTo)){const cy=y0+(f-start+0.5)*dy;
+      ctx.fillStyle=PDF.accent;ctx.beginPath();ctx.arc(cx,cy,fg[i]?5:4.2,0,Math.PI*2);ctx.fill();
+      if(fg[i]){ctx.fillStyle="#fff";ctx.font=`7px ${PDF.mono}`;ctx.fillText(String(fg[i]),cx,cy+2.6);}}
+  });
+  ctx.restore();
+}
+function pdfChordName(ctx,ch,x,y,maxW,base){
+  const m=CHORD_RE.exec(ch);
+  const parts=m?[[m[1],600,1,PDF.ink,0],[m[2]||"",500,.62,PDF.ink,-.38],[m[3]?"/"+m[3]:"",500,1,PDF.muted,0]]:[[ch,600,1,PDF.ink,0]];
+  const widthAt=(sz)=>parts.reduce((w,[t,wt,k])=>{ctx.font=`${wt} ${sz*k}px ${PDF.chord}`;return w+ctx.measureText(t).width;},0);
+  let sz=base;const w=widthAt(sz);if(w>maxW)sz=Math.max(14,sz*maxW/w);
+  let cx=x;ctx.textAlign="left";ctx.textBaseline="alphabetic";
+  parts.forEach(([t,wt,k,col,dy])=>{if(!t)return;ctx.font=`${wt} ${sz*k}px ${PDF.chord}`;ctx.fillStyle=col;ctx.fillText(t,cx,y+dy*sz);cx+=ctx.measureText(t).width;});
+}
+function wrapText(ctx,text,maxW){
+  const out=[];String(text).split("\n").forEach(para=>{let line="";for(const ch of para){if(ctx.measureText(line+ch).width>maxW&&line){out.push(line);line=ch;}else line+=ch;}out.push(line);});return out;
+}
+async function renderPdfPages(s){
+  const {W,H,M}=PDF;const key=transposeKey(s.key,offset),flat=flatKey(key);
+  try{await Promise.all([`700 40px "Barlow Condensed"`,`600 40px "Barlow Condensed"`,`500 40px "Barlow Condensed"`,`400 20px "IBM Plex Mono"`,`500 20px "Zen Kaku Gothic New"`].map(f=>document.fonts.load(f)));}catch(e){}
+  const pages=[];let ctx,y;
+  const newPage=()=>{const cv=document.createElement("canvas");cv.width=W;cv.height=H;ctx=cv.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);pages.push(cv);y=M;
+    if(pages.length>1){ctx.fillStyle=PDF.muted;ctx.font=`500 22px ${PDF.body}`;ctx.textAlign="left";ctx.textBaseline="alphabetic";ctx.fillText(`${s.title||"無題"}（続き）`,M,y+10);y+=50;}};
+  newPage();
+  // header
+  ctx.fillStyle=PDF.ink;ctx.font=`700 76px ${PDF.chord}`;ctx.textBaseline="alphabetic";ctx.textAlign="left";
+  ctx.fillText(s.title||"無題",M,y+64);y+=84;
+  if(s.artist){ctx.fillStyle=PDF.muted;ctx.font=`500 28px ${PDF.body}`;ctx.fillText(s.artist,M,y+28);y+=44;}
+  const sounding=s.capo?transposeKey(key,Number(s.capo)):null;
+  const meta=[`KEY ${key}${offset?`（原調 ${s.key}）`:""}`,`CAPO ${s.capo?s.capo+(sounding?`（実音 ${sounding}）`:""):"なし"}`,`♩= ${s.bpm||"—"}`,`拍子 ${s.time||"4/4"}`].join("    ");
+  ctx.fillStyle=PDF.muted;ctx.font=`400 22px ${PDF.mono}`;ctx.fillText(meta,M,y+26);y+=48;
+  ctx.fillStyle=PDF.line;ctx.fillRect(M,y,W-2*M,2);y+=40;
+  const markW=100,x0=M+markW,BW=(W-2*M-markW)/4;
+  const nameH=46,romH=showRoman?26:0,diagH=showDiag?Math.round(96*1.25):0,rowH=nameH+romH+diagH+26;
+  const cache={};const shapeOf=(c)=>c in cache?cache[c]:(cache[c]=effectiveShape(offset?null:s.voicings,c));
+  (s.sections||[]).forEach((sec,si)=>{
+    const lines=parseLines(sec.bars);
+    const rows=[];lines.forEach((bars,li)=>{for(let i=0;i<bars.length;i+=4)rows.push({bars:bars.slice(i,i+4),last:li===lines.length-1&&i+4>=bars.length});});
+    if(!rows.length)rows.push({bars:[],last:true});
+    let prev=null;
+    rows.forEach((row,ri)=>{
+      if(y+rowH>H-M)newPage();
+      if(ri===0){ // rehearsal mark
+        ctx.strokeStyle=PDF.ink;ctx.lineWidth=3;ctx.strokeRect(M+2,y+2,46,46);
+        ctx.fillStyle=PDF.ink;ctx.font=`700 30px ${PDF.chord}`;ctx.textAlign="center";ctx.fillText(LETTERS[si]||"•",M+25,y+36);
+        ctx.fillStyle=PDF.muted;ctx.font=`500 17px ${PDF.body}`;
+        wrapText(ctx,sec.name,markW-14).slice(0,3).forEach((l,k)=>ctx.fillText(l,M+25,y+76+k*22));
+        ctx.textAlign="left";}
+      if(!row.bars.length){ctx.fillStyle=PDF.muted;ctx.font=`500 20px ${PDF.body}`;ctx.fillText("まだコードがありません",x0+10,y+36);y+=70;return;}
+      row.bars.forEach((b,k)=>{
+        const bx=x0+k*BW;ctx.fillStyle=PDF.ink;ctx.fillRect(bx,y,3,rowH);
+        const colW=(BW-24)/b.length;
+        b.forEach((tok,j)=>{
+          const cx=bx+14+j*colW;
+          const slash=()=>{ctx.fillStyle=PDF.muted;ctx.font=`500 44px ${PDF.chord}`;ctx.fillText(tok==="%"?"%":"/",cx+4,y+44);};
+          if(tok==="%"||tok==="/"){slash();return;}
+          const t=transposeChord(tok,offset,flat);
+          if(t===prev){ctx.fillStyle=PDF.muted;ctx.font=`500 44px ${PDF.chord}`;ctx.fillText("/",cx+4,y+44);return;}
+          prev=t;
+          pdfChordName(ctx,t,cx,y+42,colW-8,b.length>=3?32:40);
+          let yy=y+nameH;
+          if(showRoman){ctx.fillStyle=PDF.accent;ctx.font=`500 18px ${PDF.mono}`;ctx.fillText(roman(t,key),cx,yy+14);yy+=romH;}
+          if(showDiag){const sh=shapeOf(t);if(sh){const sc=Math.min(1.25,(colW-6)/84);pdfDiagram(ctx,sh,cx-8*sc,yy,sc);}}
+        });
+      });
+      const endX=x0+row.bars.length*BW;
+      ctx.fillStyle=PDF.ink;
+      if(row.last){ctx.fillRect(endX-8,y,3,rowH);ctx.fillRect(endX,y,6,rowH);}else ctx.fillRect(endX,y,3,rowH);
+      ctx.fillStyle=PDF.line;ctx.fillRect(x0,y+rowH,endX-x0,2);
+      y+=rowH+20;
+    });
+    y+=34;
+  });
+  if(s.memo){ctx.font=`400 24px ${PDF.body}`;const ls=wrapText(ctx,s.memo,W-2*M);
+    if(y+60>H-M)newPage();ctx.fillStyle=PDF.muted;ctx.font=`700 18px ${PDF.body}`;ctx.fillText("メモ",M,y+18);y+=36;
+    ctx.font=`400 24px ${PDF.body}`;ctx.fillStyle=PDF.ink;
+    ls.forEach(l=>{if(y+34>H-M)newPage();ctx.fillText(l,M,y+26);y+=36;});}
+  pages.forEach((cv,i)=>{const c=cv.getContext("2d");c.fillStyle=PDF.muted;c.font=`400 18px ${PDF.mono}`;c.textAlign="right";c.fillText(`${i+1} / ${pages.length}`,W-M,H-60);});
+  return pages;
+}
+async function savePdf(){
+  const s=song();if(!s)return;const b=$("pdfBtn");
+  btnBusy(b,"作成中…");
+  try{
+    const [jsPDF,pages]=await Promise.all([loadJsPdf(),renderPdfPages(s)]);
+    const doc=new jsPDF({unit:"mm",format:"a4",orientation:"portrait"});
+    pages.forEach((cv,i)=>{if(i)doc.addPage();doc.addImage(cv.toDataURL("image/jpeg",0.92),"JPEG",0,0,210,297);});
+    const blob=doc.output("blob");
+    const name=((s.title||"コード表")+(offset?`_${transposeKey(s.key,offset)}`:"")).replace(/[\\/:*?"<>|]/g,"_")+".pdf";
+    await saveFile(name,blob);
+    btnDone($("pdfBtn")||b,"✓ 保存しました");toast(`${name} を保存しました`,true);
+  }catch(e){
+    const code=e&&e.code;
+    if(code==="declined"){btnDone($("pdfBtn")||b,"PDFで保存");toast("保存をやめました",false);}
+    else if(code==="rate_limited"){btnDone($("pdfBtn")||b,"PDFで保存");toast("保存の確認画面がすでに開いています",false);}
+    else{btnDone($("pdfBtn")||b,"作成できませんでした",false);toast(e&&e.message==="load"?"PDFの部品を読み込めませんでした。通信を確認してもう一度お試しください":"PDFを作成できませんでした",false);}
+  }
+}
+
+/* ---------- files: inside claude.ai use the downloads capability, on a normal website a plain download ---------- */
+async function saveFile(name,blob){
+  const inClaude=!!(window.claude&&window.claude.use);
+  if(inClaude){const dl=await window.claude.use("downloads");
+    if(!dl)throw {code:"unavailable",message:"この画面ではファイルを保存できません"};
+    return dl.save({filename:name,data:blob});}
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
+  return {status:"saved"};
+}
+/* ---------- backup: all songs and My Chords as one JSON file ---------- */
+async function saveBackup(){
+  const b=$("bkSave");flush();
+  const data={app:"chordnote",version:1,exportedAt:new Date().toISOString(),songs,shapes};
+  const d=new Date(),pad=n=>String(n).padStart(2,"0");
+  const name=`コード進行ノート_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
+  try{await saveFile(name,new Blob([JSON.stringify(data,null,1)],{type:"application/json"}));
+    btnDone(b,"✓ 保存しました");toast(`曲 ${songs.length} 件・マイコード ${shapes.length} 件を保存しました`,true);}
+  catch(e){btnDone(b,"保存できませんでした",false);toast(e&&e.code==="declined"?"保存をやめました":(e&&e.message)||"保存できませんでした",false);}
+}
+async function loadBackup(file){
+  let data;
+  try{data=JSON.parse(await file.text());}catch(e){toast("ファイルを読めませんでした。バックアップのJSONファイルを選んでください",false);return;}
+  if(!data||data.app!=="chordnote"||!Array.isArray(data.songs)){toast("コード進行ノートのバックアップではないようです",false);return;}
+  if(!canWrite){toast("このページでは読み込みできません（閲覧のみ）",false);return;}
+  let ns=0,nc=0;
+  try{
+    for(const raw of data.songs){if(!raw||!raw.id)continue;const sg=migrateSong(raw);await store.save(sg);
+      const i=songs.findIndex(x=>x.id===sg.id);if(i>=0)songs[i]=sg;else songs.push(sg);ns++;}
+    for(const sh of (data.shapes||[])){if(!sh||!sh.id||!Array.isArray(sh.frets))continue;await store.saveShape(sh);
+      const i=shapes.findIndex(x=>x.id===sh.id);if(i>=0)shapes[i]=sh;else shapes.push(sh);nc++;}
+    toast(`曲 ${ns} 件・マイコード ${nc} 件を読み込みました`,true);
+  }catch(e){toast(`途中で止まりました（曲 ${ns} 件・マイコード ${nc} 件まで読み込み済み）`,false);}
+  renderList();renderMain();
+}
+$("bkSave").addEventListener("click",saveBackup);
+$("bkFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)loadBackup(f);e.target.value="";});
+
+/* ---------- boot ---------- */
+try{showRoman=localStorage.getItem("chordnote-roman")!=="0";showDiag=localStorage.getItem("chordnote-diag")!=="0";}catch(e){}
+(async()=>{
+  const c=window.claude;
+  if(!c||!c.use){initLocal();return;}
+  try{
+    const [db,user]=await Promise.all([c.use("db"),c.use("user")]);
+    if(user){try{canWrite=!!(await user.canEdit());}catch(e){canWrite=true;}}
+    if(db)initDb(db);else{canWrite=true;initLocal();}
+  }catch(e){initLocal();}
+})();
+})();
+</script>
+
+</body>
+</html>
