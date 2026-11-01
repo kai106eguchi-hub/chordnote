@@ -756,8 +756,7 @@ function renderPalette(){
       <span class="status" id="palStatus"></span></div>
     <h2>${esc(draft.key)} のダイアトニックコード（タップで入力）</h2>`+rows.map(r=>`<div class="chips" style="margin-bottom:6px">${r.map(x=>`<button class="chip" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><i>${esc(x.r)}</i></button>`).join("")}</div>`).join("")
     +(mineNames.length?`<div class="chips" style="margin-bottom:6px">${mineNames.map(n=>`<button class="chip mine" data-c="${esc(n)}"><b>${esc(n)}</b><i>${esc(roman(n,draft.key)||"マイ")}</i></button>`).join("")}</div>`:"")
-    +`<div class="chips"><button class="chip again" id="againChip" aria-label="同じコードをもう一回入力"><b>—</b><i>同じコードをもう一回</i></button><button class="chip split" id="splitChip"><b>[ ]</b><i>小節を分割</i></button><button class="chip" data-c="%"><b>%</b><i>繰り返し</i></button><button class="chip" data-c="/"><b>/</b><i>続く</i></button>
-      <button class="chip pad-toggle${padOpen?" on":""}" id="padToggle" aria-expanded="${padOpen}"><b>${padOpen?"閉じる":"＋ コードを入力"}</b><i>指板から逆引き</i></button></div>`
+    +`<div class="chips"><button class="chip again" id="againChip" aria-label="同じコードをもう一回入力"><b>—</b><i>同じコードをもう一回</i></button><button class="chip split" id="splitChip"><b>[ ]</b><i>小節を分割</i></button><button class="chip" data-c="%"><b>%</b><i>繰り返し</i></button><button class="chip" data-c="/"><b>/</b><i>続く</i></button></div>`
     +(padOpen?`<div class="pad">
       <div class="board-ctl">
         <label><input type="checkbox" id="pBarre" ${padDraft.barreOn?"checked":""}> セーハ</label>
@@ -770,7 +769,6 @@ function renderPalette(){
   $("pal").classList.toggle("open",padOpen);
   $("pal").onmousedown=e=>{if(e.target.closest(".chip"))e.preventDefault();};
   $("pal").onclick=e=>{
-    if(e.target.closest("#padToggle")){padOpen=!padOpen;if(padOpen&&!padDraft)resetPad();renderPalette();return;}
     if(e.target.closest("#splitChip")){insertChord(splitOpen()?"]":"[");return;}
     if(e.target.closest("#againChip")){const c=againChord();if(c)insertChord(c);else toast("まだ入力したコードがありません",false);return;}
     const b=e.target.closest(".chip");if(!b||!b.dataset.c)return;insertChord(b.dataset.c);};
@@ -780,7 +778,7 @@ function renderPalette(){
 }
 
 /* chord input from the fretboard (reverse lookup) */
-let padOpen=false,padDraft=null,padName="",padPick=0;
+let padOpen=true,padDraft=null,padName="",padPick=0;
 function resetPad(){padDraft={frets:[-1,-1,-1,-1,-1,-1],fingers:[0,0,0,0,0,0],barreOn:false};padName="";padPick=0;}
 if(!padDraft)resetPad();
 function bindPad(){
