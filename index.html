@@ -92,6 +92,8 @@ button{cursor:pointer}
 .ch.rep .n{color:var(--muted)}
 .ch.same .n{color:var(--muted);font-weight:500;font-size:30px;transform:skewX(-8deg);padding:0 4px;opacity:.7}
 .ch .cd{display:block;margin-top:4px;margin-left:-6px}
+.vcompact .lines .ch .cd,.vcompact .lines .ch .r{display:none}
+.vcompact .bar{min-height:0}
 .ch .cd svg{display:block;width:100%;max-width:var(--dw,59px);height:auto}
 .empty-sec{color:var(--muted);font-size:13px;padding:10px 0}
 
@@ -492,7 +494,10 @@ let shapes=[];let tab="songs";let currentShape=null;let shapeDraft=null;let shap
 const store={kind:"none",save:async()=>{},remove:async()=>{},saveShape:async()=>{},removeShape:async()=>{}};
 
 /* "縦の幅" slider: row gaps, bar padding and diagram size, all through CSS variables */
+const COMPACT_AT=0.15; // at the narrowest end the chart shows chord names only
+function isCompact(){return heightK<=COMPACT_AT;}
 function applyHeight(){const k=heightK,r=document.documentElement.style;
+  document.documentElement.classList.toggle("vcompact",isCompact());
   r.setProperty("--vgap",(4+28*k).toFixed(1)+"px");r.setProperty("--vpad",(3+14*k).toFixed(1)+"px");r.setProperty("--dw",(84*(0.5+0.4*k)).toFixed(1)+"px");}
 /* feedback: inline status, toast, and button states. quiet=true skips the toast (typing, autosave) */
 function setStatus(t,ok,quiet){const el=$("status");if(el){el.textContent=t;el.className="status"+(ok?" ok":"");}if(!quiet)toast(t,ok);}
@@ -1339,7 +1344,8 @@ async function renderPdfPages(s){
   ctx.fillStyle=PDF.line;ctx.fillRect(M,y,W-2*M,2);y+=40;
   const markW=100,x0=M+markW,BW=(W-2*M-markW)/4;
   const dF=(0.5+0.4*heightK)/0.7;
-  const nameH=46,romH=showRoman?26:0,diagH=showDiag?Math.round(96*1.25*dF):0,rowH=nameH+romH+diagH+Math.round(10+32*heightK);
+  const pRoman=showRoman&&!isCompact(),pDiag=showDiag&&!isCompact();
+  const nameH=46,romH=pRoman?26:0,diagH=pDiag?Math.round(96*1.25*dF):0,rowH=nameH+romH+diagH+Math.round(10+32*heightK);
   const cache={};const shapeOf=(c)=>c in cache?cache[c]:(cache[c]=effectiveShape(offset?null:s.voicings,c));
   (s.sections||[]).forEach((sec,si)=>{
     const lines=parseLines(sec.bars);
@@ -1373,8 +1379,8 @@ async function renderPdfPages(s){
           prev=t;
           pdfChordName(ctx,t,cx,y+42,colW-8,40);
           let yy=y+nameH;
-          if(showRoman){ctx.fillStyle=PDF.accent;ctx.font=`500 18px ${PDF.mono}`;ctx.fillText(roman(t,key),cx,yy+14);yy+=romH;}
-          if(showDiag){const sh=shapeOf(t);if(sh){const sc=Math.min(1.25*dF,(colW-6)/84);pdfDiagram(ctx,sh,cx-8*sc,yy,sc);}}
+          if(pRoman){ctx.fillStyle=PDF.accent;ctx.font=`500 18px ${PDF.mono}`;ctx.fillText(roman(t,key),cx,yy+14);yy+=romH;}
+          if(pDiag){const sh=shapeOf(t);if(sh){const sc=Math.min(1.25*dF,(colW-6)/84);pdfDiagram(ctx,sh,cx-8*sc,yy,sc);}}
         });
       });
       const endX=bxAcc;
