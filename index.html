@@ -73,11 +73,11 @@ button{cursor:pointer}
 .mark{display:flex;flex-direction:column;align-items:center;gap:4px}
 .mark .box{width:32px;height:32px;border:2px solid var(--ink);display:grid;place-items:center;font-family:var(--f-chord);font-weight:700;font-size:20px}
 .mark .nm{font-size:11px;color:var(--muted);text-align:center;line-height:1.3;word-break:break-all}
-.bars{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));row-gap:16px}
-.bar{min-width:0;border-left:2px solid var(--ink);padding:10px 12px;min-height:78px;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);column-gap:10px;align-items:start;border-bottom:1px solid var(--line)}
+.bars{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));row-gap:var(--vgap,16px)}
+.bar{min-width:0;border-left:2px solid var(--ink);padding:var(--vpad,10px) 12px;min-height:calc(40px + 2*var(--vpad,10px));display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);column-gap:10px;align-items:start;border-bottom:1px solid var(--line)}
 .bar:nth-child(4n),.bar:last-child{border-right:2px solid var(--ink)}
 .bar>.ch{min-width:0}
-.lines{display:flex;flex-direction:column;gap:16px;min-width:0}
+.lines{display:flex;flex-direction:column;gap:var(--vgap,16px);min-width:0}
 
 .lines>.bars:last-child>.bar:last-child{border-right:4px double var(--ink)}
 .bar.d3 .ch .n{font-size:22px}
@@ -92,7 +92,7 @@ button{cursor:pointer}
 .ch.rep .n{color:var(--muted)}
 .ch.same .n{color:var(--muted);font-weight:500;font-size:30px;transform:skewX(-8deg);padding:0 4px;opacity:.7}
 .ch .cd{display:block;margin-top:4px;margin-left:-6px}
-.ch .cd svg{display:block;width:100%;max-width:59px;height:auto}
+.ch .cd svg{display:block;width:100%;max-width:var(--dw,59px);height:auto}
 .empty-sec{color:var(--muted);font-size:13px;padding:10px 0}
 
 .diagrams h2,.memo h2,.pal h2{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:700;margin:0 0 10px}
@@ -260,7 +260,7 @@ button.pressed,.btn.pressed,.chip.pressed{transform:scale(.94)}
   .paper{padding:14px 12px 18px}
   .sec{grid-template-columns:minmax(0,1fr);gap:6px}
   .mark{flex-direction:row}
-  .bar{padding:6px 5px;min-height:60px;column-gap:4px}
+  .bar{padding:calc(var(--vpad,10px)*.6) 5px;min-height:calc(30px + 1.2*var(--vpad,10px));column-gap:4px}
   .ch .n{font-size:18px}
   .ch .r{font-size:9px}
   .ch .cd{margin-left:-3px}
@@ -486,11 +486,14 @@ function blankSong(){return {fmt:2,title:"新しい曲",artist:"",key:"C",capo:0
   sections:[{name:"イントロ",bars:""},{name:"Aメロ",bars:""},{name:"サビ",bars:""}],updatedAt:Date.now()};}
 
 /* ---------- state ---------- */
-let songs=[];let current=null;let mode="view";let offset=0;let showRoman=true;let showDiag=true;let widthK=0.4;let confirmViewDelete=false;let canWrite=true;
+let songs=[];let current=null;let mode="view";let offset=0;let showRoman=true;let showDiag=true;let widthK=0.4;let heightK=0.5;let confirmViewDelete=false;let canWrite=true;
 let draft=null;let dirty=false;let saveTimer=null;let lastFocusSec=0;let confirmDelete=false;
 let shapes=[];let tab="songs";let currentShape=null;let shapeDraft=null;let shapeStart=1;let confirmShapeDel=false;
 const store={kind:"none",save:async()=>{},remove:async()=>{},saveShape:async()=>{},removeShape:async()=>{}};
 
+/* "縦の幅" slider: row gaps, bar padding and diagram size, all through CSS variables */
+function applyHeight(){const k=heightK,r=document.documentElement.style;
+  r.setProperty("--vgap",(4+28*k).toFixed(1)+"px");r.setProperty("--vpad",(3+14*k).toFixed(1)+"px");r.setProperty("--dw",(84*(0.5+0.4*k)).toFixed(1)+"px");}
 /* feedback: inline status, toast, and button states. quiet=true skips the toast (typing, autosave) */
 function setStatus(t,ok,quiet){const el=$("status");if(el){el.textContent=t;el.className="status"+(ok?" ok":"");}if(!quiet)toast(t,ok);}
 let toastTimer=null;
@@ -618,7 +621,8 @@ function toolbar(){
       ${mode==="view"?`<span class="tp">移調 <button class="btn small" data-tp="-1" aria-label="半音下げる">−</button><output>${offset>0?"+"+offset:offset}</output><button class="btn small" data-tp="1" aria-label="半音上げる">＋</button></span>
       <label class="tp"><input type="checkbox" id="romanChk" ${showRoman?"checked":""}> 度数</label>
       <label class="tp"><input type="checkbox" id="diagChk" ${showDiag?"checked":""}> コード図</label>
-      <label class="tp wk">幅の差 <span class="wk-l">均等</span><input type="range" id="widthK" min="0" max="1" step="0.05" value="${widthK}" aria-label="小節の幅の差"><span class="wk-l">大きく</span></label>`:""}
+      <label class="tp wk">幅の差 <span class="wk-l">均等</span><input type="range" id="widthK" min="0" max="1" step="0.05" value="${widthK}" aria-label="小節の幅の差"><span class="wk-l">大きく</span></label>
+      <label class="tp wk">縦の幅 <span class="wk-l">狭く</span><input type="range" id="heightK" min="0" max="1" step="0.05" value="${heightK}" aria-label="表示の縦の幅"><span class="wk-l">広く</span></label>`:""}
     </div>
     <div class="grp">
       ${mode==="view"&&offset&&canWrite?`<button class="btn small" id="applyTp">この調で保存</button>`:""}
@@ -633,6 +637,7 @@ function bindToolbar(){
   document.querySelectorAll("[data-tp]").forEach(b=>b.onclick=()=>{offset=Math.max(-11,Math.min(11,offset+Number(b.dataset.tp)));renderMain();});
   const wk=$("widthK");if(wk)wk.oninput=()=>{widthK=Number(wk.value);try{localStorage.setItem("chordnote-widthk",String(widthK));}catch(e){}
     const s=song();if(!s)return;const y=window.scrollY;const keep=document.activeElement===wk;renderMain();window.scrollTo(0,y);if(keep){const n=$("widthK");if(n)n.focus();}};
+  const hk=$("heightK");if(hk)hk.oninput=()=>{heightK=Number(hk.value);applyHeight();try{localStorage.setItem("chordnote-heightk",String(heightK));}catch(e){}};
   const dc=$("diagChk");if(dc)dc.onchange=()=>{showDiag=dc.checked;try{localStorage.setItem("chordnote-diag",showDiag?"1":"0");}catch(e){}renderMain();};
   const r=$("romanChk");if(r)r.onchange=()=>{showRoman=r.checked;try{localStorage.setItem("chordnote-roman",showRoman?"1":"0");}catch(e){}renderMain();};
   const a=$("applyTp");if(a)a.onclick=applyTranspose;
@@ -1333,7 +1338,8 @@ async function renderPdfPages(s){
   ctx.fillStyle=PDF.muted;ctx.font=`400 22px ${PDF.mono}`;ctx.fillText(meta,M,y+26);y+=48;
   ctx.fillStyle=PDF.line;ctx.fillRect(M,y,W-2*M,2);y+=40;
   const markW=100,x0=M+markW,BW=(W-2*M-markW)/4;
-  const nameH=46,romH=showRoman?26:0,diagH=showDiag?Math.round(96*1.25):0,rowH=nameH+romH+diagH+26;
+  const dF=(0.5+0.4*heightK)/0.7;
+  const nameH=46,romH=showRoman?26:0,diagH=showDiag?Math.round(96*1.25*dF):0,rowH=nameH+romH+diagH+Math.round(10+32*heightK);
   const cache={};const shapeOf=(c)=>c in cache?cache[c]:(cache[c]=effectiveShape(offset?null:s.voicings,c));
   (s.sections||[]).forEach((sec,si)=>{
     const lines=parseLines(sec.bars);
@@ -1368,14 +1374,14 @@ async function renderPdfPages(s){
           pdfChordName(ctx,t,cx,y+42,colW-8,40);
           let yy=y+nameH;
           if(showRoman){ctx.fillStyle=PDF.accent;ctx.font=`500 18px ${PDF.mono}`;ctx.fillText(roman(t,key),cx,yy+14);yy+=romH;}
-          if(showDiag){const sh=shapeOf(t);if(sh){const sc=Math.min(1.25,(colW-6)/84);pdfDiagram(ctx,sh,cx-8*sc,yy,sc);}}
+          if(showDiag){const sh=shapeOf(t);if(sh){const sc=Math.min(1.25*dF,(colW-6)/84);pdfDiagram(ctx,sh,cx-8*sc,yy,sc);}}
         });
       });
       const endX=bxAcc;
       ctx.fillStyle=PDF.ink;
       if(row.last){ctx.fillRect(endX-8,y,3,rowH);ctx.fillRect(endX,y,6,rowH);}else ctx.fillRect(endX,y,3,rowH);
       ctx.fillStyle=PDF.line;ctx.fillRect(x0,y+rowH,endX-x0,2);
-      y+=rowH+20;
+      y+=rowH+Math.round(6+28*heightK);
     });
     y+=34;
   });
@@ -1446,6 +1452,8 @@ $("bkFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files
 
 /* ---------- boot ---------- */
 try{const k=parseFloat(localStorage.getItem("chordnote-widthk"));if(k>=0&&k<=1)widthK=k;}catch(e){}
+try{const k=parseFloat(localStorage.getItem("chordnote-heightk"));if(k>=0&&k<=1)heightK=k;}catch(e){}
+applyHeight();
 try{showRoman=localStorage.getItem("chordnote-roman")!=="0";showDiag=localStorage.getItem("chordnote-diag")!=="0";}catch(e){}
 (async()=>{
   const c=window.claude;
