@@ -214,6 +214,9 @@ button{cursor:pointer}
 .chip.pad-toggle b{font-family:var(--f-body);font-size:13px;font-weight:700;color:var(--accent);padding-block:2px}
 .chip.pad-toggle.on{background:var(--accent-soft)}
 .pal.open{position:static}
+.pal-open-row{display:flex}
+.pal-btn{border-color:var(--accent);color:var(--accent);font-weight:700}
+.pal-btn.on{background:var(--accent);color:var(--paper)}
 .esec>.pal{position:static;margin:4px -12px -12px;padding:12px;border-top:1px dashed var(--accent);background:var(--bg);border-radius:0 0 6px 6px}
 .pal-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-bottom:10px}
 .pal-head .target{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
@@ -603,7 +606,7 @@ function renderMain(){
     <p class="note">左の一覧から曲を開くか、新しい曲を作成します。コードは小節ごとに <b>|</b> で区切って入力します。</p>
     ${canWrite?`<button class="btn primary" id="wNew">＋ 新しい曲を作る</button>`:""}</div>`;
     const w=$("wNew");if(w)w.onclick=()=>$("newBtn").click();return;}
-  if(mode==="edit"){draft=JSON.parse(JSON.stringify(s));resetHistory();renderEditor();}else renderView(s);
+  if(mode==="edit"){draft=JSON.parse(JSON.stringify(s));resetHistory();palShown=false;renderEditor();}else renderView(s);
 }
 function toolbar(){
   return `<div class="toolbar">
@@ -718,7 +721,8 @@ function secEditorHTML(sec,i){
       <button class="btn small" data-act="dup">複製</button>
       <button class="btn small danger" data-act="del">削除</button></div>
     <textarea class="bars-in" id="secBars${i}" data-sf="bars" spellcheck="false" autocapitalize="off" placeholder="C G Am [F G]" aria-label="${esc(sec.name)}のコード">${esc(sec.bars)}</textarea>
-    <div class="preview" id="pv${i}">${barsHTML(sec.bars,0,draft.key,showRoman)}</div></div>`;
+    <div class="preview" id="pv${i}">${barsHTML(sec.bars,0,draft.key,showRoman)}</div>
+    <div class="pal-open-row"><button class="btn small pal-btn${palShown&&i===lastFocusSec?" on":""}" data-pal="${i}" aria-expanded="${palShown&&i===lastFocusSec}">${palShown&&i===lastFocusSec?"コード入力を閉じる":"＋ コードを入力"}</button></div></div>`;
 }
 function bindEditor(){
   document.querySelectorAll("[data-f]").forEach(el=>{
@@ -735,7 +739,10 @@ function bindEditor(){
     markDirty(e.isTrusted);});
   secs.addEventListener("focusin",e=>{const box=e.target.closest(".esec");if(!box)return;
     const i=Number(box.dataset.i);if(e.target.dataset.sf==="bars")touchedSecs.add(i);setTarget(i);});
-  secs.addEventListener("click",e=>{const box=e.target.closest(".esec");if(box&&!e.target.closest("[data-act]"))setTarget(Number(box.dataset.i));});
+  secs.addEventListener("click",e=>{
+    const pb=e.target.closest("[data-pal]");
+    if(pb){const i=Number(pb.dataset.pal);palShown=!(palShown&&lastFocusSec===i);setTarget(i,{reveal:palShown});return;}
+    const box=e.target.closest(".esec");if(box&&!e.target.closest("[data-act]")&&!e.target.closest(".pal"))setTarget(Number(box.dataset.i));});
   secs.addEventListener("input",e=>{if(e.target.dataset.sf==="name")renderTargetSelect();else{updateAgain();clearTimeout(vlTimer);vlTimer=setTimeout(renderVoicingList,400);}});
   secs.addEventListener("keyup",updateAgain);secs.addEventListener("mouseup",updateAgain);
   secs.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b)return;const i=Number(b.closest(".esec").dataset.i);const S=draft.sections;
@@ -766,9 +773,14 @@ function rerenderSecs(){if(palEl)palEl.remove();$("secs").innerHTML=draft.sectio
 const touchedSecs=new Set();
 /* the chord palette lives right under the section it types into */
 let palEl=null;
+let palShown=false;
 function placePalette(opts){
+  document.querySelectorAll("[data-pal]").forEach(b=>{const on=palShown&&Number(b.dataset.pal)===lastFocusSec;
+    b.classList.toggle("on",on);b.setAttribute("aria-expanded",String(on));b.textContent=on?"コード入力を閉じる":"＋ コードを入力";});
+  if(palEl)palEl.hidden=!palShown;
   const box=document.querySelector(`.esec[data-i="${lastFocusSec}"]`);
-  if(!palEl||!box||palEl.parentElement===box)return;
+  if(!palShown||!palEl||!box)return;
+  if(palEl.parentElement===box){if(opts&&opts.reveal)box.scrollIntoView({block:"start",behavior:"smooth"});return;}
   const before=box.getBoundingClientRect().top;
   box.appendChild(palEl);
   if(opts&&opts.reveal){box.scrollIntoView({block:"start",behavior:"smooth"});return;}
