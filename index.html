@@ -214,6 +214,7 @@ button{cursor:pointer}
 .chip.pad-toggle b{font-family:var(--f-body);font-size:13px;font-weight:700;color:var(--accent);padding-block:2px}
 .chip.pad-toggle.on{background:var(--accent-soft)}
 .pal.open{position:static}
+.esec>.pal{position:static;margin:4px -12px -12px;padding:12px;border-top:1px dashed var(--accent);background:var(--bg);border-radius:0 0 6px 6px}
 .pal-head{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-bottom:10px}
 .pal-head .target{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700}
 .pal-head select{padding:6px 10px;border:2px solid var(--accent);border-radius:6px;background:var(--paper);font-weight:700;max-width:60vw}
@@ -705,6 +706,7 @@ function renderEditor(){
         <p class="hint">コードをタップすると、押さえられる形の候補が出ます。選んだ形が曲のコード図に使われます。</p>
         <div class="vlist" id="vlist"></div><div id="vpick"></div></section>
     </div></div>`;
+  palEl=$("pal");
   bindToolbar();bindEditor();renderPalette();vOpen=null;renderVoicingList();
 }
 function secEditorHTML(sec,i){
@@ -759,12 +761,24 @@ async function deleteSong(id){
       catch(e){toast("元に戻せませんでした",false);}}});}
   catch(e){songs.push(backup);renderList();toast("削除できませんでした",false);}
 }
-function rerenderSecs(){$("secs").innerHTML=draft.sections.map((s,i)=>secEditorHTML(s,i)).join("");touchedSecs.clear();setTarget(lastFocusSec);}
+function rerenderSecs(){if(palEl)palEl.remove();$("secs").innerHTML=draft.sections.map((s,i)=>secEditorHTML(s,i)).join("");touchedSecs.clear();setTarget(lastFocusSec);}
 /* where palette / fretboard input goes */
 const touchedSecs=new Set();
-function setTarget(i){
+/* the chord palette lives right under the section it types into */
+let palEl=null;
+function placePalette(opts){
+  const box=document.querySelector(`.esec[data-i="${lastFocusSec}"]`);
+  if(!palEl||!box||palEl.parentElement===box)return;
+  const before=box.getBoundingClientRect().top;
+  box.appendChild(palEl);
+  if(opts&&opts.reveal){box.scrollIntoView({block:"start",behavior:"smooth"});return;}
+  const after=box.getBoundingClientRect().top;
+  if(Math.abs(after-before)>1)window.scrollBy(0,after-before); // keep the tapped section where it was
+}
+function setTarget(i,opts){
   if(!draft)return;lastFocusSec=Math.max(0,Math.min(i,draft.sections.length-1));
   document.querySelectorAll(".esec").forEach(x=>x.classList.toggle("focus",Number(x.dataset.i)===lastFocusSec));
+  placePalette(opts);
   renderTargetSelect();
   const pi=$("pInsert");if(pi){const s=draft.sections[lastFocusSec];pi.textContent=`「${s?s.name:"セクション"}」に入力`;}
   updateAgain();
@@ -795,10 +809,10 @@ function renderTargetSelect(){
 }
 function refreshPreviews(){draft.sections.forEach((s,i)=>{const p=$("pv"+i);if(p)p.innerHTML=barsHTML(s.bars,0,draft.key,showRoman);});}
 function renderPalette(){
-  if(!$("pal")||!draft)return;
+  if(!palEl||!draft)return;
   const rows=diatonic(draft.key);
   const mineNames=[...new Set(sortedShapes().map(s=>s.name).filter(Boolean))];
-  $("pal").innerHTML=`<div class="pal-head"><label class="target">入力先 <select id="palTarget" aria-label="コードを入力するセクション"></select></label>
+  palEl.innerHTML=`<div class="pal-head"><label class="target">入力先 <select id="palTarget" aria-label="コードを入力するセクション"></select></label>
       <span class="status" id="palStatus"></span></div>
     <h2>${esc(draft.key)} のダイアトニックコード（タップで入力）</h2>`+rows.map(r=>`<div class="chips" style="margin-bottom:6px">${r.map(x=>`<button class="chip" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><i>${esc(x.r)}</i></button>`).join("")}</div>`).join("")
     +(mineNames.length?`<div class="chips" style="margin-bottom:6px">${mineNames.map(n=>`<button class="chip mine" data-c="${esc(n)}"><b>${esc(n)}</b><i>${esc(roman(n,draft.key)||"マイ")}</i></button>`).join("")}</div>`:"")
@@ -812,14 +826,14 @@ function renderPalette(){
       </div>
       <div class="board-scroll"><div class="board" id="pBoard">${boardInnerHTML(padDraft)}</div></div>
       <div class="pad-res" id="pRes"></div></div>`:"");
-  $("pal").classList.toggle("open",padOpen);
-  $("pal").onmousedown=e=>{if(e.target.closest(".chip"))e.preventDefault();};
-  $("pal").onclick=e=>{
+  palEl.classList.toggle("open",padOpen);
+  palEl.onmousedown=e=>{if(e.target.closest(".chip"))e.preventDefault();};
+  palEl.onclick=e=>{
     if(e.target.closest("#splitChip")){insertChord(splitOpen()?"]":"[");return;}
     if(e.target.closest("#againChip")){const c=againChord();if(c)insertChord(c);else toast("まだ入力したコードがありません",false);return;}
     const b=e.target.closest(".chip");if(!b||!b.dataset.c)return;insertChord(b.dataset.c);};
   setTarget(lastFocusSec);
-  $("palTarget").onchange=e=>setTarget(Number(e.target.value));
+  $("palTarget").onchange=e=>setTarget(Number(e.target.value),{reveal:true});
   if(padOpen)bindPad();
 }
 
