@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mychordnote.netlify.app/sitemap.xml

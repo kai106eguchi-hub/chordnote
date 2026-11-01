@@ -3,11 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="ギターのコード進行を曲・セクション・小節ごとに記録し、コード図・度数・移調で確認できるノート。">
+<title>コード進行ノート｜ギターのコード譜をコード図つきで記録・移調・PDF保存</title>
+<meta name="description" content="ギターのコード進行を曲・セクション・小節ごとに記録できる無料のWebノート。コード図つきのコード譜、押さえ方の候補選び、指板からのコード名逆引き、移調・度数表示、PDF保存に対応。登録不要。">
+<link rel="canonical" href="https://mychordnote.netlify.app/">
+<meta name="robots" content="index,follow">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="コード進行ノート">
+<meta property="og:title" content="コード進行ノート｜ギターのコード譜をコード図つきで記録">
+<meta property="og:description" content="ギターのコード進行を曲・セクション・小節ごとに記録できる無料のWebノート。コード図つきのコード譜、押さえ方の候補選び、指板からのコード名逆引き、移調・度数表示、PDF保存に対応。登録不要。">
+<meta property="og:url" content="https://mychordnote.netlify.app/">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#A8561A">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23A8561A'/%3E%3Cg stroke='%23fff' stroke-width='3'%3E%3Cpath d='M18 14v38M30 14v38M42 14v38'/%3E%3Cpath d='M14 16h32' stroke-width='5'/%3E%3Cpath d='M14 28h32M14 40h32' stroke-width='1.5'/%3E%3C/g%3E%3Ccircle cx='30' cy='34' r='5' fill='%23fff'/%3E%3Ccircle cx='42' cy='22' r='5' fill='%23fff'/%3E%3C/svg%3E">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"コード進行ノート","url":"https://mychordnote.netlify.app/","applicationCategory":"MusicApplication","operatingSystem":"Any","inLanguage":"ja","description":"ギターのコード進行を曲・セクション・小節ごとに記録できる無料のWebノート。コード図つきのコード譜、押さえ方の候補選び、指板からのコード名逆引き、移調・度数表示、PDF保存に対応。登録不要。","offers":{"@type":"Offer","price":"0","priceCurrency":"JPY"}}</script>
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
-<title>コード進行ノート</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
@@ -135,6 +147,11 @@ button{cursor:pointer}
 .status.ok{color:var(--ok)}
 .welcome{max-width:520px;margin:12vh auto 0;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
 .welcome h1{font-family:var(--f-chord);font-size:36px;margin:0}
+.welcome.intro{max-width:640px;text-align:left;align-items:flex-start;margin-top:6vh}
+.welcome.intro h1{font-size:44px}
+.welcome .lead{font-size:16px;margin:0}
+.welcome .feat{margin:4px 0 8px;padding-left:1.2em;display:flex;flex-direction:column;gap:8px;line-height:1.7}
+.welcome .feat code{font-family:var(--f-mono);font-size:12px;background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:0 4px}
 .copybox{width:100%;min-height:160px;font-family:var(--f-mono);font-size:12px;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--paper)}
 .menu-btn{display:none}
 
@@ -313,7 +330,16 @@ button.pressed,.btn.pressed,.chip.pressed{transform:scale(.94)}
     </div>
   </aside>
   <main class="main" id="main">
-    <div class="welcome"><h1>読み込み中…</h1><p class="note">保存された曲を取得しています。</p></div>
+    <div class="welcome intro"><h1>コード進行ノート</h1>
+      <p class="lead">ギターのコード進行を、曲ごと・セクションごとに記録できる無料のノートです。</p>
+      <ul class="feat">
+        <li><b>1行4小節のコード譜</b>：コードを並べるだけで1コード1小節。<code>[C G]</code> で小節を分割、<code>/</code> で拍の長さも書けます。</li>
+        <li><b>コード図つき</b>：押さえ方の候補から選べて、指板をタップして入力するとコード名を逆引きします。</li>
+        <li><b>移調・度数表示・カポ</b>：キーを半音ずつ動かせて、I・V7・vi などの度数も表示します。</li>
+        <li><b>PDFで保存</b>：小節の幅や縦の幅を調整して、そのまま印刷用のPDFにできます。</li>
+        <li><b>登録不要</b>：データはお使いのブラウザに保存されます。バックアップのファイルで持ち運べます。</li>
+      </ul>
+      </div>
   </main>
 </div>
 
@@ -610,9 +636,19 @@ function song(){return songs.find(s=>s.id===current);}
 function renderMain(){
   if(tab==="shapes")return renderShapeMain();
   const s=song();const main=$("main");
-  if(!s){main.innerHTML=`<div class="welcome"><h1>曲を選んでください</h1>
-    <p class="note">左の一覧から曲を開くか、新しい曲を作成します。コードは小節ごとに <b>|</b> で区切って入力します。</p>
-    ${canWrite?`<button class="btn primary" id="wNew">＋ 新しい曲を作る</button>`:""}</div>`;
+  if(!s){main.innerHTML=songs.length?`<div class="welcome"><h1>曲を選んでください</h1>
+    <p class="note">左の一覧から曲を開くか、新しい曲を作成します。</p>
+    ${canWrite?`<button class="btn primary" id="wNew">＋ 新しい曲を作る</button>`:""}</div>`
+    :`<div class="welcome intro"><h1>コード進行ノート</h1>
+      <p class="lead">ギターのコード進行を、曲ごと・セクションごとに記録できる無料のノートです。</p>
+      <ul class="feat">
+        <li><b>1行4小節のコード譜</b>：コードを並べるだけで1コード1小節。<code>[C G]</code> で小節を分割、<code>/</code> で拍の長さも書けます。</li>
+        <li><b>コード図つき</b>：押さえ方の候補から選べて、指板をタップして入力するとコード名を逆引きします。</li>
+        <li><b>移調・度数表示・カポ</b>：キーを半音ずつ動かせて、I・V7・vi などの度数も表示します。</li>
+        <li><b>PDFで保存</b>：小節の幅や縦の幅を調整して、そのまま印刷用のPDFにできます。</li>
+        <li><b>登録不要</b>：データはお使いのブラウザに保存されます。バックアップのファイルで持ち運べます。</li>
+      </ul>
+      ${canWrite?`<button class="btn primary" id="wNew">＋ 最初の曲を作る</button>`:""}</div>`;
     const w=$("wNew");if(w)w.onclick=()=>$("newBtn").click();return;}
   if(mode==="edit"){draft=JSON.parse(JSON.stringify(s));resetHistory();palShown=false;renderEditor();}else renderView(s);
 }
