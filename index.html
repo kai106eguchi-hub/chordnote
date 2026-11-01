@@ -272,6 +272,19 @@ button.pressed,.btn.pressed,.chip.pressed{transform:scale(.94)}
 }
 @media (min-width:761px){.shelf .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* weighted bar widths (slider "幅の差") */
+.lines .bars.wrow .bar{border-right:0!important;grid-auto-flow:row;grid-template-rows:auto}
+.lines .bars.wrow .bar.rowend{border-right:2px solid var(--ink)!important}
+.lines .bars.wrow .bar.final{border-right:4px double var(--ink)!important}
+.lines .bars.wrow .bar.d3 .ch .n{font-size:26px}
+.tp.wk input{width:110px;accent-color:var(--accent)}
+.tp.wk .wk-l{font-size:10px}
+.toast.has-act{pointer-events:auto}
+.toast-act{border:1px solid currentColor;background:none;color:inherit;border-radius:5px;padding:3px 10px;font-weight:700;margin-left:4px}
+.btn.danger-fill{background:#C2452B;border-color:#C2452B;color:#fff}
+.trial-badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--paper);background:var(--accent);border-radius:4px;padding:2px 8px;margin-left:8px;vertical-align:middle}
+@media (max-width:760px){.lines .bars.wrow .bar .ch .n{font-size:18px}}
 </style>
 
 <div class="app">
@@ -438,22 +451,38 @@ function barsHTML(text,offset,key,showRoman,diag){
   const flat=flatKey(key);
   let prev=null; // a chord repeated right after itself is drawn as a slash
   const slash=`<div class="ch same" title="同じコードが続く"><span class="n">/</span></div>`;
-  return `<div class="lines">`+lines.map(bars=>`<div class="bars">`+bars.map(b=>`<div class="bar${b.length>=5?" d5":b.length>=3?" d3":""}">`+b.map(c=>{
-    if(c==="%")return chordHTML(c);
-    if(c==="/")return slash;
+  // each bar's width follows how many chords it holds; 4 bars per row share the row
+  const cell=(c)=>{
+    if(c==="%")return {h:chordHTML(c),w:.45};
+    if(c==="/")return {h:slash,w:.45};
     const t=transposeChord(c,offset,flat);
-    if(t===prev)return slash;
+    if(t===prev)return {h:slash,w:.45};
     prev=t;
     const sh=diag?diag(t):null;
-    return `<div class="ch">${chordHTML(t)}${showRoman?`<span class="r">${esc(roman(t,key))}</span>`:""}${diag?`<span class="cd">${sh?diagramSVG(sh,0.7):""}</span>`:""}</div>`;
-  }).join("")+`</div>`).join("")+`</div>`).join("")+`</div>`;
+    return {h:`<div class="ch">${chordHTML(t)}${showRoman?`<span class="r">${esc(roman(t,key))}</span>`:""}${diag?`<span class="cd">${sh?diagramSVG(sh,0.7):""}</span>`:""}</div>`,w:1};
+  };
+  const out=[];
+  lines.forEach((bars,li)=>{
+    const built=bars.map(b=>{const cells=b.map(cell);const sum=cells.reduce((n,x)=>n+x.w,0);
+      return {cells,w:1+widthK*Math.max(0,sum-1)};});
+    for(let i=0;i<built.length;i+=4){
+      const row=built.slice(i,i+4);const lastRow=li===lines.length-1&&i+4>=built.length;
+      const cols=row.map(b=>`minmax(0,${b.w.toFixed(2)}fr)`);
+      if(row.length<4)cols.push(`minmax(0,${(4-row.length)}fr)`);
+      out.push(`<div class="bars wrow" style="grid-template-columns:${cols.join(" ")}">`+row.map((b,k)=>{
+        const end=k===row.length-1;
+        return `<div class="bar${end?(lastRow?" final":" rowend"):""}" style="grid-template-columns:${b.cells.map(c=>`minmax(0,${c.w}fr)`).join(" ")}">`+b.cells.map(c=>c.h).join("")+`</div>`;}).join("")
+        +(row.length<4?`<div class="spacer"></div>`:"")+`</div>`);
+    }
+  });
+  return `<div class="lines">`+out.join("")+`</div>`;
 }
 function uid(){return "s"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function blankSong(){return {fmt:2,title:"新しい曲",artist:"",key:"C",capo:0,bpm:100,time:"4/4",memo:"",
   sections:[{name:"イントロ",bars:""},{name:"Aメロ",bars:""},{name:"サビ",bars:""}],updatedAt:Date.now()};}
 
 /* ---------- state ---------- */
-let songs=[];let current=null;let mode="view";let offset=0;let showRoman=true;let showDiag=true;let canWrite=true;
+let songs=[];let current=null;let mode="view";let offset=0;let showRoman=true;let showDiag=true;let widthK=0.4;let confirmViewDelete=false;let canWrite=true;
 let draft=null;let dirty=false;let saveTimer=null;let lastFocusSec=0;let confirmDelete=false;
 let shapes=[];let tab="songs";let currentShape=null;let shapeDraft=null;let shapeStart=1;let confirmShapeDel=false;
 const store={kind:"none",save:async()=>{},remove:async()=>{},saveShape:async()=>{},removeShape:async()=>{}};
@@ -461,12 +490,13 @@ const store={kind:"none",save:async()=>{},remove:async()=>{},saveShape:async()=>
 /* feedback: inline status, toast, and button states. quiet=true skips the toast (typing, autosave) */
 function setStatus(t,ok,quiet){const el=$("status");if(el){el.textContent=t;el.className="status"+(ok?" ok":"");}if(!quiet)toast(t,ok);}
 let toastTimer=null;
-function toast(t,ok){
+function toast(t,ok,action){
   let el=$("toast");
   if(!el){el=document.createElement("div");el.id="toast";el.className="toast";el.setAttribute("role","status");el.setAttribute("aria-live","polite");document.body.appendChild(el);}
-  el.innerHTML=`<span class="ti">${ok?"✓":"!"}</span><span>${esc(t)}</span>`;
-  el.className="toast show "+(ok?"ok":"warn");
-  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.className="toast "+(ok?"ok":"warn");},2400);
+  el.innerHTML=`<span class="ti">${ok?"✓":"!"}</span><span>${esc(t)}</span>${action?`<button class="toast-act" type="button">${esc(action.label)}</button>`:""}`;
+  el.className="toast show "+(ok?"ok":"warn")+(action?" has-act":"");
+  if(action)el.querySelector(".toast-act").onclick=()=>{el.className="toast";clearTimeout(toastTimer);action.run();};
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.className="toast "+(ok?"ok":"warn");},action?6000:2400);
 }
 function btnBusy(b,label){if(!b)return;if(!b.dataset.label)b.dataset.label=b.innerHTML;b.disabled=true;b.classList.add("busy");b.textContent=label||"保存中…";}
 function btnDone(b,label,ok){
@@ -549,7 +579,7 @@ $("list").addEventListener("click",e=>{
   const sb=e.target.closest("[data-sid]");
   if(sb){openShape(sb.dataset.sid);$("shelf").classList.add("collapsed");$("menuBtn").setAttribute("aria-expanded","false");renderList();return;}
   const b=e.target.closest(".item");if(!b)return;
-  flush();current=b.dataset.id;mode="view";offset=0;confirmDelete=false;
+  flush();current=b.dataset.id;mode="view";offset=0;confirmDelete=false;confirmViewDelete=false;
   $("shelf").classList.add("collapsed");$("menuBtn").setAttribute("aria-expanded","false");
   renderList();renderMain();});
 $("search").addEventListener("input",renderList);
@@ -583,11 +613,13 @@ function toolbar(){
       </div>
       ${mode==="view"?`<span class="tp">移調 <button class="btn small" data-tp="-1" aria-label="半音下げる">−</button><output>${offset>0?"+"+offset:offset}</output><button class="btn small" data-tp="1" aria-label="半音上げる">＋</button></span>
       <label class="tp"><input type="checkbox" id="romanChk" ${showRoman?"checked":""}> 度数</label>
-      <label class="tp"><input type="checkbox" id="diagChk" ${showDiag?"checked":""}> コード図</label>`:""}
+      <label class="tp"><input type="checkbox" id="diagChk" ${showDiag?"checked":""}> コード図</label>
+      <label class="tp wk">幅の差 <span class="wk-l">均等</span><input type="range" id="widthK" min="0" max="1" step="0.05" value="${widthK}" aria-label="小節の幅の差"><span class="wk-l">大きく</span></label>`:""}
     </div>
     <div class="grp">
       ${mode==="view"&&offset&&canWrite?`<button class="btn small" id="applyTp">この調で保存</button>`:""}
       ${mode==="view"?`<button class="btn small" id="copyBtn">テキストでコピー</button><button class="btn small primary" id="pdfBtn">PDFで保存</button>`:""}
+      ${mode==="view"&&canWrite?(confirmViewDelete?`<span class="note">この曲を削除しますか？</span><button class="btn small danger-fill" id="vDelYes">削除する</button><button class="btn small" id="vDelNo">やめる</button>`:`<button class="btn small danger" id="vDel">削除</button>`):""}
       ${mode==="edit"?`<button class="btn small" id="undoBtn" title="元に戻す（⌘Z / Ctrl+Z）">↶ 元に戻す</button><button class="btn small" id="redoBtn" title="やり直す（⇧⌘Z / Ctrl+Y）">↷ やり直す</button>`:""}
       <span class="status" id="status"></span>
     </div></div>`;
@@ -595,12 +627,17 @@ function toolbar(){
 function bindToolbar(){
   document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{flush();mode=b.dataset.mode;offset=0;confirmDelete=false;renderMain();});
   document.querySelectorAll("[data-tp]").forEach(b=>b.onclick=()=>{offset=Math.max(-11,Math.min(11,offset+Number(b.dataset.tp)));renderMain();});
+  const wk=$("widthK");if(wk)wk.oninput=()=>{widthK=Number(wk.value);try{localStorage.setItem("chordnote-widthk",String(widthK));}catch(e){}
+    const s=song();if(!s)return;const y=window.scrollY;const keep=document.activeElement===wk;renderMain();window.scrollTo(0,y);if(keep){const n=$("widthK");if(n)n.focus();}};
   const dc=$("diagChk");if(dc)dc.onchange=()=>{showDiag=dc.checked;try{localStorage.setItem("chordnote-diag",showDiag?"1":"0");}catch(e){}renderMain();};
   const r=$("romanChk");if(r)r.onchange=()=>{showRoman=r.checked;try{localStorage.setItem("chordnote-roman",showRoman?"1":"0");}catch(e){}renderMain();};
   const a=$("applyTp");if(a)a.onclick=applyTranspose;
   const u=$("undoBtn");if(u)u.onclick=undo;const rd=$("redoBtn");if(rd)rd.onclick=redo;updateUndoButtons();
   const c=$("copyBtn");if(c)c.onclick=copyText;
   const pb=$("pdfBtn");if(pb)pb.onclick=savePdf;
+  const vd=$("vDel");if(vd)vd.onclick=()=>{confirmViewDelete=true;renderMain();};
+  const vn=$("vDelNo");if(vn)vn.onclick=()=>{confirmViewDelete=false;renderMain();};
+  const vy=$("vDelYes");if(vy)vy.onclick=()=>deleteSong(current);
 }
 function renderView(s){
   const key=transposeKey(s.key,offset);
@@ -709,9 +746,18 @@ function bindEditor(){
     const n=draft.sections.length-1;const t=$("secName"+n);if(t){t.focus();t.select();}};
   const del=$("delBtn");if(del)del.onclick=()=>{confirmDelete=true;flush();renderEditor();};
   const no=$("delNo");if(no)no.onclick=()=>{confirmDelete=false;renderEditor();};
-  const yes=$("delYes");if(yes)yes.onclick=async()=>{const id=current;clearTimeout(saveTimer);dirty=false;
-    songs=songs.filter(x=>x.id!==id);current=null;mode="view";confirmDelete=false;renderList();renderMain();
-    try{await store.remove(id);toast("曲を削除しました",true);}catch(e){toast("削除できませんでした",false);}};
+  const yes=$("delYes");if(yes)yes.onclick=()=>{clearTimeout(saveTimer);if(dirty){const s=songs.find(x=>x.id===current);if(s&&draft)Object.assign(s,JSON.parse(JSON.stringify(draft)));}dirty=false;deleteSong(current);};
+}
+async function deleteSong(id){
+  const s=songs.find(x=>x.id===id);if(!s)return;
+  const backup=JSON.parse(JSON.stringify(s));
+  songs=songs.filter(x=>x.id!==id);if(current===id)current=null;mode="view";confirmDelete=false;confirmViewDelete=false;
+  renderList();renderMain();
+  try{await store.remove(id);
+    toast(`「${backup.title||"無題"}」を削除しました`,true,{label:"元に戻す",run:async()=>{
+      try{await store.save(backup);if(!songs.find(x=>x.id===backup.id))songs.push(backup);current=backup.id;mode="view";renderList();renderMain();toast("元に戻しました",true);}
+      catch(e){toast("元に戻せませんでした",false);}}});}
+  catch(e){songs.push(backup);renderList();toast("削除できませんでした",false);}
 }
 function rerenderSecs(){$("secs").innerHTML=draft.sections.map((s,i)=>secEditorHTML(s,i)).join("");touchedSecs.clear();setTarget(lastFocusSec);}
 /* where palette / fretboard input goes */
@@ -1277,23 +1323,29 @@ async function renderPdfPages(s){
         wrapText(ctx,sec.name,markW-14).slice(0,3).forEach((l,k)=>ctx.fillText(l,M+25,y+76+k*22));
         ctx.textAlign="left";}
       if(!row.bars.length){ctx.fillStyle=PDF.muted;ctx.font=`500 20px ${PDF.body}`;ctx.fillText("まだコードがありません",x0+10,y+36);y+=70;return;}
+      // widths follow the "幅の差" slider, like the screen
+      let pp=prev;
+      const tw=row.bars.map(b=>b.map(tok=>{if(tok==="%"||tok==="/")return .45;const t=transposeChord(tok,offset,flat);if(t===pp)return .45;pp=t;return 1;}));
+      const bw=tw.map(ws=>1+widthK*Math.max(0,ws.reduce((a,c)=>a+c,0)-1));
+      const total=bw.reduce((a,c)=>a+c,0)+Math.max(0,4-row.bars.length);
+      const avail=W-2*M-markW;let bxAcc=x0;
       row.bars.forEach((b,k)=>{
-        const bx=x0+k*BW;ctx.fillStyle=PDF.ink;ctx.fillRect(bx,y,3,rowH);
-        const colW=(BW-24)/b.length;
+        const bx=bxAcc,BWk=avail*bw[k]/total;bxAcc+=BWk;ctx.fillStyle=PDF.ink;ctx.fillRect(bx,y,3,rowH);
+        const inner=BWk-24,wsum=tw[k].reduce((a,c)=>a+c,0);let cxAcc=bx+14;
         b.forEach((tok,j)=>{
-          const cx=bx+14+j*colW;
+          const colW=inner*tw[k][j]/wsum;const cx=cxAcc;cxAcc+=colW;
           const slash=()=>{ctx.fillStyle=PDF.muted;ctx.font=`500 44px ${PDF.chord}`;ctx.fillText(tok==="%"?"%":"/",cx+4,y+44);};
           if(tok==="%"||tok==="/"){slash();return;}
           const t=transposeChord(tok,offset,flat);
           if(t===prev){ctx.fillStyle=PDF.muted;ctx.font=`500 44px ${PDF.chord}`;ctx.fillText("/",cx+4,y+44);return;}
           prev=t;
-          pdfChordName(ctx,t,cx,y+42,colW-8,b.length>=3?32:40);
+          pdfChordName(ctx,t,cx,y+42,colW-8,40);
           let yy=y+nameH;
           if(showRoman){ctx.fillStyle=PDF.accent;ctx.font=`500 18px ${PDF.mono}`;ctx.fillText(roman(t,key),cx,yy+14);yy+=romH;}
           if(showDiag){const sh=shapeOf(t);if(sh){const sc=Math.min(1.25,(colW-6)/84);pdfDiagram(ctx,sh,cx-8*sc,yy,sc);}}
         });
       });
-      const endX=x0+row.bars.length*BW;
+      const endX=bxAcc;
       ctx.fillStyle=PDF.ink;
       if(row.last){ctx.fillRect(endX-8,y,3,rowH);ctx.fillRect(endX,y,6,rowH);}else ctx.fillRect(endX,y,3,rowH);
       ctx.fillStyle=PDF.line;ctx.fillRect(x0,y+rowH,endX-x0,2);
@@ -1367,6 +1419,7 @@ $("bkSave").addEventListener("click",saveBackup);
 $("bkFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)loadBackup(f);e.target.value="";});
 
 /* ---------- boot ---------- */
+try{const k=parseFloat(localStorage.getItem("chordnote-widthk"));if(k>=0&&k<=1)widthK=k;}catch(e){}
 try{showRoman=localStorage.getItem("chordnote-roman")!=="0";showDiag=localStorage.getItem("chordnote-diag")!=="0";}catch(e){}
 (async()=>{
   const c=window.claude;
