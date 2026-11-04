@@ -238,6 +238,10 @@ button{cursor:pointer}
 .chip.pad-toggle.on{background:var(--accent-soft)}
 .pal.open{position:static}
 .pal-open-row{display:flex}
+.edit-banner{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;background:var(--accent-soft);border:1px solid var(--accent);border-radius:6px;padding:8px 10px;margin-bottom:10px}
+.edit-banner b{font-family:var(--f-chord);font-size:22px;margin:0 4px}
+.edit-banner small{color:var(--muted);font-size:11px}
+.edit-banner .hint{flex:1 1 220px;margin:0}
 .pal-btn{border-color:var(--accent);color:var(--accent);font-weight:700}
 .pal-btn.on{background:var(--accent);color:var(--paper)}
 .esec>.pal{position:static;margin:4px -12px -12px;padding:12px;border-top:1px dashed var(--accent);background:var(--bg);border-radius:0 0 6px 6px}
@@ -659,7 +663,7 @@ function renderMain(){
       </ul>
       ${canWrite?`<button class="btn primary" id="wNew">＋ 最初の曲を作る</button>`:""}</div>`;
     const w=$("wNew");if(w)w.onclick=()=>$("newBtn").click();return;}
-  if(mode==="edit"){draft=JSON.parse(JSON.stringify(s));resetHistory();palShown=false;renderEditor();}else renderView(s);
+  if(mode==="edit"){draft=JSON.parse(JSON.stringify(s));resetHistory();palShown=false;editTarget=null;renderEditor();}else renderView(s);
 }
 function toolbar(){
   return `<div class="toolbar">
@@ -796,10 +800,15 @@ function bindEditor(){
     const i=Number(box.dataset.i);if(e.target.dataset.sf==="bars")touchedSecs.add(i);setTarget(i);});
   secs.addEventListener("click",e=>{
     const pb=e.target.closest("[data-pal]");
-    if(pb){const i=Number(pb.dataset.pal);palShown=!(palShown&&lastFocusSec===i);setTarget(i,{reveal:palShown});return;}
+    if(pb){const i=Number(pb.dataset.pal);palShown=!(palShown&&lastFocusSec===i);if(!palShown||(editTarget&&editTarget.sec!==i))editTarget=null;setTarget(i,{reveal:palShown});renderPadTarget();return;}
     const box=e.target.closest(".esec");if(box&&!e.target.closest("[data-act]")&&!e.target.closest(".pal"))setTarget(Number(box.dataset.i));});
   secs.addEventListener("input",e=>{if(e.target.dataset.sf==="name")renderTargetSelect();else{updateAgain();clearTimeout(vlTimer);vlTimer=setTimeout(renderVoicingList,400);}});
-  secs.addEventListener("keyup",updateAgain);secs.addEventListener("mouseup",updateAgain);
+  secs.addEventListener("keyup",e=>{updateAgain();
+    if(e.target.dataset.sf==="bars"&&/^(Arrow|Home|End|Page)/.test(e.key)&&palShown)pickChordAtCaret(e.target,false);});
+  secs.addEventListener("mouseup",updateAgain);
+  // tapping a chord in the text opens the input panel with that chord loaded, ready to change
+  secs.addEventListener("click",e=>{if(e.target.dataset.sf==="bars")pickChordAtCaret(e.target,true);});
+  secs.addEventListener("input",e=>{if(e.target.dataset.sf==="bars"&&!replacing&&editTarget){editTarget=null;renderPadTarget();}});
   secs.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b)return;const i=Number(b.closest(".esec").dataset.i);const S=draft.sections;
     if(b.dataset.act==="up"&&i>0)[S[i-1],S[i]]=[S[i],S[i-1]];
     if(b.dataset.act==="down"&&i<S.length-1)[S[i+1],S[i]]=[S[i],S[i+1]];
@@ -847,7 +856,7 @@ function setTarget(i,opts){
   document.querySelectorAll(".esec").forEach(x=>x.classList.toggle("focus",Number(x.dataset.i)===lastFocusSec));
   placePalette(opts);
   renderTargetSelect();
-  const pi=$("pInsert");if(pi){const s=draft.sections[lastFocusSec];pi.textContent=`「${s?s.name:"セクション"}」に入力`;}
+  const pi=$("pInsert");if(pi&&!editTarget){const s=draft.sections[lastFocusSec];pi.textContent=`「${s?s.name:"セクション"}」に入力`;}
   updateAgain();
 }
 /* "same chord again": the last chord before the insertion point, else the last one entered anywhere */
@@ -885,6 +894,7 @@ function renderPalette(){
     +(mineNames.length?`<div class="chips" style="margin-bottom:6px">${mineNames.map(n=>`<button class="chip mine" data-c="${esc(n)}"><b>${esc(n)}</b><i>${esc(roman(n,draft.key)||"マイ")}</i></button>`).join("")}</div>`:"")
     +`<div class="chips"><button class="chip again" id="againChip" aria-label="同じコードをもう一回入力"><b>—</b><i>同じコードをもう一回</i></button><button class="chip split" id="splitChip"><b>[ ]</b><i>小節を分割</i></button><button class="chip" data-c="%"><b>%</b><i>繰り返し</i></button><button class="chip" data-c="/"><b>/</b><i>続く</i></button><button class="chip rest-chip" data-c="-"><b>${restSVG}</b><i>休符</i></button></div>`
     +(padOpen?`<div class="pad">
+      <div id="pTarget"></div>
       <div class="board-ctl">
         <label><input type="checkbox" id="pBarre" ${padDraft.barreOn?"checked":""}> セーハ</label>
         <button class="btn small" id="pClear">リセット</button>
@@ -896,12 +906,15 @@ function renderPalette(){
   palEl.classList.toggle("open",padOpen);
   palEl.onmousedown=e=>{if(e.target.closest(".chip"))e.preventDefault();};
   palEl.onclick=e=>{
-    if(e.target.closest("#splitChip")){insertChord(splitOpen()?"]":"[");return;}
-    if(e.target.closest("#againChip")){const c=againChord();if(c)insertChord(c);else toast("まだ入力したコードがありません",false);return;}
-    const b=e.target.closest(".chip");if(!b||!b.dataset.c)return;insertChord(b.dataset.c);};
+    if(e.target.closest("#splitChip")){leaveEditAfter();insertChord(splitOpen()?"]":"[");return;}
+    if(e.target.closest("#againChip")){leaveEditAfter();const c=againChord();if(c)insertChord(c);else toast("まだ入力したコードがありません",false);return;}
+    const b=e.target.closest(".chip");if(!b||!b.dataset.c)return;
+    if(editTarget&&!["|","[","]"].includes(b.dataset.c)){replaceTarget(b.dataset.c,null);return;}
+    insertChord(b.dataset.c);};
   setTarget(lastFocusSec);
   $("palTarget").onchange=e=>setTarget(Number(e.target.value),{reveal:true});
   if(padOpen)bindPad();
+  renderPadTarget();
 }
 
 /* chord input from the fretboard (reverse lookup) */
@@ -925,16 +938,14 @@ function renderPadResult(){
     el.innerHTML=`<div class="pad-grid"><div>${diagramSVG(draftDiagram(d),1.2)}</div><div class="pad-main">
       <p class="hint">この音の組み合わせに合うコード名が見つかりませんでした。名前を入力して入れることもできます。</p>
       <div class="pad-act"><input id="pName" value="${esc(padName)}" placeholder="コード名" aria-label="入力するコード名" autocapitalize="off" spellcheck="false">
-      <button class="btn primary" id="pInsert">「${esc(sec?sec.name:"セクション")}」に入力</button></div><span class="status" id="pStatus"></span></div></div>`;
+      <button class="btn primary" id="pInsert">${editTarget?`「${esc(editTarget.tok)}」を置き換える`:`「${esc(sec?sec.name:"セクション")}」に入力`}</button></div><span class="status" id="pStatus"></span></div></div>`;
     $("pName").oninput=e=>{padName=e.target.value;};
-    $("pInsert").onclick=()=>{const n=padName.trim();if(!n)return;
-      draft.voicings=Object.assign({},draft.voicings||{},{[n]:{frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null}});
-      insertChord(n);padNote(`${n} を入力しました`,true);btnDone($("pInsert"),"✓ 入力しました");};
+    $("pInsert").onclick=()=>padCommit();
     return;}
   if(!cands.length){
     el.innerHTML=`<p class="hint">鳴らす弦の押さえる位置をタップすると、コード名の候補が出ます。最初は全弦ミュート（×）なので、開放弦は左端の × を ○ に切り替えてください。</p>`;return;}
   if(padPick>=cands.length)padPick=0;
-  const pick=cands[padPick];
+  const pick=cands[Math.max(0,padPick)];
   if(!padName)padName=pick.name;
   const ivs=intervalsOf(d.frets,pick.root);
   el.innerHTML=`<div class="pad-grid">
@@ -945,18 +956,14 @@ function renderPadResult(){
       <div class="code">構成音 ${ivs.map(x=>`<b>${esc(x.n)}</b><span class="ivl">${esc(x.iv)}</span>`).join(" ")}</div>
       <div class="pad-act">
         <input id="pName" value="${esc(padName)}" aria-label="入力するコード名" autocapitalize="off" spellcheck="false">
-        <button class="btn primary" id="pInsert">「${esc(sec?sec.name:"セクション")}」に入力</button>
+        <button class="btn primary" id="pInsert">${editTarget?`「${esc(editTarget.tok)}」を置き換える`:`「${esc(sec?sec.name:"セクション")}」に入力`}</button>
         ${canWrite?`<button class="btn small" id="pSave">この押さえ方をマイコードに保存</button>`:""}
       </div>
       <span class="status" id="pStatus"></span>
     </div></div>`;
   el.querySelectorAll("[data-pk]").forEach(b=>b.onclick=()=>{padPick=Number(b.dataset.pk);padName=cands[padPick].name;renderPadResult();});
   $("pName").oninput=e=>{padName=e.target.value;};
-  $("pInsert").onclick=()=>{const n=padName.trim();if(!n)return;
-    // remember this exact fingering for the song so the chart shows it
-    draft.voicings=Object.assign({},draft.voicings||{},{[n]:{frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null}});
-    insertChord(n);
-    padNote(`「${draft.sections[lastFocusSec].name}」に ${n} を入力しました`,true);btnDone($("pInsert"),"✓ 入力しました");};
+  $("pInsert").onclick=()=>padCommit();
   const sv=$("pSave");if(sv)sv.onclick=async()=>{
     const n=padName.trim();if(!n)return;
     const obj={id:uid(),name:n,frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null,memo:draft&&draft.title?`「${draft.title}」で入力`:"",updatedAt:Date.now()};
@@ -965,6 +972,79 @@ function renderPadResult(){
     try{await store.saveShape(obj);padNote(`マイコードに ${n} を保存しました`,true);btnDone($("pSave")||sv,"✓ 保存しました");}
     catch(e){shapes=shapes.filter(x=>x.id!==obj.id);padNote("保存できませんでした",false);btnDone($("pSave")||sv,"保存できませんでした",false);}
   };
+}
+/* ---- editing a chord already written in the text ---- */
+let editTarget=null,replacing=false;
+function tokenAt(text,pos){
+  const sep=ch=>/[\s|\[\]]/.test(ch);let a=pos,b=pos;
+  while(a>0&&!sep(text[a-1]))a--;while(b<text.length&&!sep(text[b]))b++;
+  return a<b?{start:a,end:b,tok:text.slice(a,b)}:null;
+}
+function isChordTok(t){return !!t&&CHORD_RE.test(t)&&!isRest(t)&&t!=="%"&&t!=="/";}
+function pickChordAtCaret(ta,open){
+  const box=ta.closest(".esec");if(!box)return;const i=Number(box.dataset.i);
+  if((ta.selectionEnd??0)-(ta.selectionStart??0)>0&&!open)return;
+  const t=tokenAt(ta.value,ta.selectionStart??0);
+  if(!t||!isChordTok(t.tok)){if(editTarget){editTarget=null;if(palShown)renderPadTarget();}return;}
+  if(editTarget&&editTarget.sec===i&&editTarget.start===t.start&&editTarget.tok===t.tok&&palShown)return;
+  editTarget={sec:i,start:t.start,end:t.end,tok:t.tok};
+  if(open)palShown=true;
+  if(!palShown)return;
+  setTarget(i);
+  loadPadFrom(t.tok);
+  renderPalette();
+}
+function loadPadFrom(name){
+  const v=draft.voicings&&draft.voicings[name];
+  const sh=v&&Array.isArray(v.frets)?v:effectiveShape(draft.voicings,name);
+  if(sh){padDraft={frets:sh.frets.slice(),fingers:(sh.fingers||[]).map(x=>Math.max(0,FINGERS.indexOf(String(x||"")))).concat([0,0,0,0,0,0]).slice(0,6),barreOn:!!sh.barre};}
+  else padDraft={frets:[-1,-1,-1,-1,-1,-1],fingers:[0,0,0,0,0,0],barreOn:false};
+  padName=name;
+  const c=detectChords(padDraft.frets).map(x=>x.name);padPick=c.indexOf(name);
+}
+function renderPadTarget(){
+  const el=$("pTarget");if(!el)return;
+  const pi=$("pInsert");
+  if(!editTarget){el.innerHTML="";if(pi){const s=draft.sections[lastFocusSec];pi.textContent=`「${s?s.name:"セクション"}」に入力`;}return;}
+  const sec=draft.sections[editTarget.sec];
+  el.innerHTML=`<div class="edit-banner"><span>選択中のコード <b>${esc(editTarget.tok)}</b><small>「${esc(sec?sec.name:"")}」</small></span>
+    <span class="hint">指板や名前を変えて「置き換える」、または上のボタンを押すと、このコードが変わります。</span>
+    <button class="btn small" id="pUnsel">選択を解除</button></div>`;
+  $("pUnsel").onclick=()=>{leaveEditAfter();resetPad();renderPalette();};
+  if(pi)pi.textContent=`「${editTarget.tok}」を置き換える`;
+}
+function leaveEditAfter(){ // stop editing; put the caret right after the chord
+  if(!editTarget)return;const ta=$("secBars"+editTarget.sec);
+  if(ta){try{ta.setSelectionRange(editTarget.end,editTarget.end);}catch(e){}touchedSecs.add(editTarget.sec);}
+  editTarget=null;renderPadTarget();
+}
+function replaceTarget(name,voicing){
+  const t=editTarget;if(!t)return false;
+  const ta=$("secBars"+t.sec);if(!ta)return false;
+  let cur=ta.value.slice(t.start,t.end)===t.tok?t:tokenAt(ta.value,t.start);
+  if(!cur||cur.tok!==t.tok){editTarget=null;renderPadTarget();toast("選んでいたコードが見つかりません。もう一度タップしてください",false);return false;}
+  if(voicing)draft.voicings=Object.assign({},draft.voicings||{},{[name]:voicing});
+  ta.value=ta.value.slice(0,cur.start)+name+ta.value.slice(cur.end);
+  const end=cur.start+name.length;try{ta.setSelectionRange(end,end);}catch(e){}
+  touchedSecs.add(t.sec);
+  replacing=true;ta.dispatchEvent(new Event("input",{bubbles:true}));replacing=false;
+  const old=t.tok;
+  editTarget=isChordTok(name)?{sec:t.sec,start:cur.start,end,tok:name}:null;
+  toast(old===name?`${name} の押さえ方を変えました`:`${old} → ${name} に変えました`,true);
+  if(editTarget&&!voicing)loadPadFrom(name);
+  if(!editTarget)resetPad();
+  renderPalette();
+  const pv=$("pv"+t.sec);if(pv){pv.classList.remove("flash");void pv.offsetWidth;pv.classList.add("flash");}
+  return true;
+}
+function padCommit(){
+  const d=padDraft,n=padName.trim();if(!n)return;
+  const voicing={frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null};
+  if(editTarget){if(replaceTarget(n,voicing))btnDone($("pInsert"),"✓ 置き換えました");return;}
+  // remember this exact fingering for the song so the chart shows it
+  draft.voicings=Object.assign({},draft.voicings||{},{[n]:voicing});
+  insertChord(n);
+  padNote(`「${draft.sections[lastFocusSec].name}」に ${n} を入力しました`,true);btnDone($("pInsert"),"✓ 入力しました");
 }
 function insertChord(c){
   const i=Math.min(lastFocusSec,draft.sections.length-1);if(i<0)return;
@@ -999,7 +1079,7 @@ function recordHistory(typing){
 function updateUndoButtons(){const u=$("undoBtn"),r=$("redoBtn");if(u)u.disabled=!undoStack.length;if(r)r.disabled=!redoStack.length;}
 function restore(snap){
   const keep={focus:lastFocusSec,y:window.scrollY};
-  draft=JSON.parse(snap);lastSnap=snap;lastWasTyping=false;
+  draft=JSON.parse(snap);lastSnap=snap;lastWasTyping=false;editTarget=null;
   renderEditor();setTarget(Math.min(keep.focus,draft.sections.length-1));window.scrollTo(0,keep.y);
   dirty=true;clearTimeout(saveTimer);saveTimer=setTimeout(flush,500);
   const it=document.querySelector(`.item[data-id="${CSS.escape(current)}"] .t`);if(it)it.textContent=draft.title||"無題";
