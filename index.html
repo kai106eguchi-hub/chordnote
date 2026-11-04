@@ -102,6 +102,10 @@ button{cursor:pointer}
 .ch .n .bass{font-weight:500;color:var(--muted)}
 .ch .r{font-family:var(--f-mono);font-size:11px;color:var(--accent);line-height:1.2}
 .ch.rep .n{color:var(--muted)}
+.ch.rest .n{display:flex;align-items:center;height:1.1em;color:var(--ink)}
+.rest-ico{width:auto;height:30px;display:block}
+.chip .rest-ico{height:18px}
+.preview .rest-ico{height:22px}
 .ch.same .n{color:var(--muted);font-weight:500;font-size:30px;transform:skewX(-8deg);padding:0 4px;opacity:.7}
 .ch .cd{display:block;margin-top:4px;margin-left:-6px}
 .vcompact .lines .ch .cd,.vcompact .lines .ch .r{display:none}
@@ -477,6 +481,10 @@ function chordHTML(ch){
   if(!m)return `<div class="ch"><span class="n">${esc(ch)}</span></div>`;
   return `<span class="n">${esc(m[1])}${m[2]?`<sup>${esc(m[2])}</sup>`:""}${m[3]?`<span class="bass">/${esc(m[3])}</span>`:""}</span>`;
 }
+/* rests: "-" (also 休 / N.C.) is a rest; drawn as a quarter-rest glyph */
+function isRest(t){return t==="-"||t==="休"||/^N\.?C\.?$/i.test(t);}
+const REST_PATH="M7 2 L14 11 L8 18 L14 26 C8 24 5 28 10 35";
+const restSVG=`<svg class="rest-ico" viewBox="0 0 20 38" aria-hidden="true"><path d="${REST_PATH}" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 function barsHTML(text,offset,key,showRoman,diag){
   const lines=parseLines(text);
   if(!lines.length)return `<div class="empty-sec">まだコードがありません</div>`;
@@ -486,6 +494,7 @@ function barsHTML(text,offset,key,showRoman,diag){
   // each bar's width follows how many chords it holds; 4 bars per row share the row
   const cell=(c)=>{
     if(c==="%")return {h:chordHTML(c),w:.45};
+    if(isRest(c)){prev=null;return {h:`<div class="ch rest" title="休符"><span class="n">${restSVG}</span></div>`,w:.45};}
     if(c==="/")return {h:slash,w:.45};
     const t=transposeChord(c,offset,flat);
     if(t===prev)return {h:slash,w:.45};
@@ -720,7 +729,7 @@ function songText(s,off){
   const key=transposeKey(s.key,off),flat=flatKey(key);
   let t=`${s.title}${s.artist?" / "+s.artist:""}\nKey: ${key}  Capo: ${s.capo||0}  BPM: ${s.bpm||"-"}  ${s.time||"4/4"}\n`;
   (s.sections||[]).forEach(sec=>{t+=`\n[${sec.name}]\n`;
-    parseLines(sec.bars).forEach(line=>{const bars=line.map(b=>b.map(c=>transposeChord(c,off,flat)));
+    parseLines(sec.bars).forEach(line=>{const bars=line.map(b=>b.map(c=>isRest(c)?"休":transposeChord(c,off,flat)));
       for(let i=0;i<bars.length;i+=4)t+="| "+bars.slice(i,i+4).map(b=>b.join(" ")).join(" | ")+" |\n";});});
   if(s.memo)t+=`\nメモ: ${s.memo}\n`;return t;
 }
@@ -744,7 +753,7 @@ function renderEditor(){
         <div class="f"><label for="fBpm">BPM</label><input id="fBpm" data-f="bpm" type="number" min="20" max="300" inputmode="numeric" value="${esc(d.bpm)}"></div>
         <div class="f"><label for="fTime">拍子</label><select id="fTime" data-f="time">${["4/4","3/4","6/8","2/4","12/8"].map(t=>`<option ${t===d.time?"selected":""}>${t}</option>`).join("")}</select></div>
       </div>
-      <p class="hint">コードをスペースで区切って並べると、<b>1つのコードが1小節</b>になります。1小節を分けたいときだけ <code>[ ]</code> で囲みます（パレットの「小節を分割」ボタンでも入ります）。<code>[C G]</code> は半分ずつ、<code>[C / / G]</code> は3拍と1拍。<code>/</code> だけの小節は前のコードが続く、<code>%</code> は前の小節の繰り返し。改行するとコード表も改行します。例：<code>C G/B [Am G] F</code></p>
+      <p class="hint">コードをスペースで区切って並べると、<b>1つのコードが1小節</b>になります。1小節を分けたいときだけ <code>[ ]</code> で囲みます（パレットの「小節を分割」ボタンでも入ります）。<code>[C G]</code> は半分ずつ、<code>[C / / G]</code> は3拍と1拍。<code>/</code> だけの小節は前のコードが続く、<code>%</code> は前の小節の繰り返し、<code>-</code> は休符（<code>[C -]</code> で後半が休み）。改行するとコード表も改行します。例：<code>C G/B [Am G] F</code></p>
       <div id="secs">${d.sections.map((sec,i)=>secEditorHTML(sec,i)).join("")}</div>
       <div><button class="btn" id="addSec">＋ セクションを追加</button></div>
       <div class="f"><label for="fMemo">メモ（ストローク、リズム、気づいたことなど）</label><textarea id="fMemo" data-f="memo">${esc(d.memo)}</textarea></div>
@@ -846,7 +855,7 @@ let lastInserted="";
 function againChord(){
   if(!draft)return "";
   const i=lastFocusSec,ta=$("secBars"+i);
-  const pick=(txt)=>{const t=txt.split(/[\s|\[\]]+/).filter(x=>x&&x!=="%"&&x!=="/");return t.length?t[t.length-1]:"";};
+  const pick=(txt)=>{const t=txt.split(/[\s|\[\]]+/).filter(x=>x&&x!=="%"&&x!=="/"&&!isRest(x));return t.length?t[t.length-1]:"";};
   if(ta){const pos=touchedSecs.has(i)?(ta.selectionStart??ta.value.length):ta.value.length;const c=pick(ta.value.slice(0,pos));if(c)return c;}
   if(lastInserted)return lastInserted;
   for(let k=i-1;k>=0;k--){const c=pick(draft.sections[k].bars||"");if(c)return c;}
@@ -874,7 +883,7 @@ function renderPalette(){
       <span class="status" id="palStatus"></span></div>
     <h2>${esc(draft.key)} のダイアトニックコード（タップで入力）</h2>`+rows.map(r=>`<div class="chips" style="margin-bottom:6px">${r.map(x=>`<button class="chip" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><i>${esc(x.r)}</i></button>`).join("")}</div>`).join("")
     +(mineNames.length?`<div class="chips" style="margin-bottom:6px">${mineNames.map(n=>`<button class="chip mine" data-c="${esc(n)}"><b>${esc(n)}</b><i>${esc(roman(n,draft.key)||"マイ")}</i></button>`).join("")}</div>`:"")
-    +`<div class="chips"><button class="chip again" id="againChip" aria-label="同じコードをもう一回入力"><b>—</b><i>同じコードをもう一回</i></button><button class="chip split" id="splitChip"><b>[ ]</b><i>小節を分割</i></button><button class="chip" data-c="%"><b>%</b><i>繰り返し</i></button><button class="chip" data-c="/"><b>/</b><i>続く</i></button></div>`
+    +`<div class="chips"><button class="chip again" id="againChip" aria-label="同じコードをもう一回入力"><b>—</b><i>同じコードをもう一回</i></button><button class="chip split" id="splitChip"><b>[ ]</b><i>小節を分割</i></button><button class="chip" data-c="%"><b>%</b><i>繰り返し</i></button><button class="chip" data-c="/"><b>/</b><i>続く</i></button><button class="chip rest-chip" data-c="-"><b>${restSVG}</b><i>休符</i></button></div>`
     +(padOpen?`<div class="pad">
       <div class="board-ctl">
         <label><input type="checkbox" id="pBarre" ${padDraft.barreOn?"checked":""}> セーハ</label>
@@ -972,7 +981,7 @@ function insertChord(c){
   ta.dispatchEvent(new Event("input",{bubbles:true}));
   const ps=$("palStatus");if(ps){ps.textContent=`「${draft.sections[i].name}」に ${c} を入力`;ps.className="status ok";}
   toast(`「${draft.sections[i].name}」に ${c} を入力`,true);
-  if(!["|","%","/","[","]"].includes(c))lastInserted=c;
+  if(!["|","%","/","[","]"].includes(c)&&!isRest(c))lastInserted=c;
   updateAgain();
   const pv=$("pv"+i);if(pv){pv.classList.remove("flash");void pv.offsetWidth;pv.classList.add("flash");}
 }
@@ -1399,7 +1408,7 @@ async function renderPdfPages(s){
       if(!row.bars.length){ctx.fillStyle=PDF.muted;ctx.font=`500 20px ${PDF.body}`;ctx.fillText("まだコードがありません",x0+10,y+36);y+=70;return;}
       // widths follow the "幅の差" slider, like the screen
       let pp=prev;
-      const tw=row.bars.map(b=>b.map(tok=>{if(tok==="%"||tok==="/")return .45;const t=transposeChord(tok,offset,flat);if(t===pp)return .45;pp=t;return 1;}));
+      const tw=row.bars.map(b=>b.map(tok=>{if(isRest(tok)){pp=null;return .45;}if(tok==="%"||tok==="/")return .45;const t=transposeChord(tok,offset,flat);if(t===pp)return .45;pp=t;return 1;}));
       const bw=tw.map(ws=>1+widthK*Math.max(0,ws.reduce((a,c)=>a+c,0)-1));
       const total=bw.reduce((a,c)=>a+c,0)+Math.max(0,4-row.bars.length);
       const avail=W-2*M-markW;let bxAcc=x0;
@@ -1409,6 +1418,7 @@ async function renderPdfPages(s){
         b.forEach((tok,j)=>{
           const colW=inner*tw[k][j]/wsum;const cx=cxAcc;cxAcc+=colW;
           const slash=()=>{ctx.fillStyle=PDF.muted;ctx.font=`500 44px ${PDF.chord}`;ctx.fillText(tok==="%"?"%":"/",cx+4,y+44);};
+          if(isRest(tok)){prev=null;ctx.save();ctx.translate(cx+4,y+8);ctx.scale(1.1,1.1);ctx.strokeStyle=PDF.ink;ctx.lineWidth=3.2;ctx.lineCap="round";ctx.lineJoin="round";ctx.beginPath();ctx.moveTo(7,2);ctx.lineTo(14,11);ctx.lineTo(8,18);ctx.lineTo(14,26);ctx.bezierCurveTo(8,24,5,28,10,35);ctx.stroke();ctx.restore();return;}
           if(tok==="%"||tok==="/"){slash();return;}
           const t=transposeChord(tok,offset,flat);
           if(t===prev){ctx.fillStyle=PDF.muted;ctx.font=`500 44px ${PDF.chord}`;ctx.fillText("/",cx+4,y+44);return;}
