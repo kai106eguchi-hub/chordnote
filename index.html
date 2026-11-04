@@ -224,6 +224,8 @@ button{cursor:pointer}
 .vpick{margin-top:12px;background:var(--paper);border:1px solid var(--accent);border-radius:6px;padding:12px}
 .vhead{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-bottom:10px}
 .vhead b{font-family:var(--f-chord);font-size:22px}
+.vscope{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
+.vscope select{padding:4px 8px;border:2px solid var(--accent);border-radius:6px;background:var(--paper);font-weight:700}
 .vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
 .vopt{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 4px}
 .vopt .vl{font-size:11px;font-weight:700;color:var(--muted)}
@@ -706,9 +708,8 @@ function renderView(s){
   const key=transposeKey(s.key,offset);
   const sounding=s.capo?transposeKey(key,Number(s.capo)):null;
   // chord diagram under each chord: the fingering entered for this song, then My Chords, then the standard shape
-  const cache={};
-  const diag=showDiag?(c)=>{if(c in cache)return cache[c];
-    return cache[c]=effectiveShape(offset?null:s.voicings,c);}:null;
+  const diagFor=(sec)=>{if(!showDiag)return null;const cache={};
+    return (c)=>c in cache?cache[c]:(cache[c]=effectiveShape(offset?null:s.voicings,c,offset?null:sec.voicings));};
   $("main").innerHTML=`<div class="sheet">${toolbar()}
     <header class="head"><h1>${esc(s.title||"無題")}</h1><div class="artist">${esc(s.artist||"")}</div>
       <div class="meta"><span>KEY <b>${esc(key)}</b>${offset?` <span class="orig">(原調 ${esc(s.key)})</span>`:""}</span>
@@ -716,7 +717,7 @@ function renderView(s){
       <span>♩= <b>${esc(s.bpm||"—")}</b></span><span>拍子 <b>${esc(s.time||"4/4")}</b></span>
       <span>小節数 <b>${(s.sections||[]).reduce((n,x)=>n+parseBars(x.bars).length,0)}</b></span></div></header>
     <section class="paper">${(s.sections||[]).map((sec,i)=>`<div class="sec"><div class="mark"><div class="box">${LETTERS[i]||"•"}</div><div class="nm">${esc(sec.name)}</div></div>
-      ${barsHTML(sec.bars,offset,key,showRoman,diag)}</div>`).join("")||`<div class="empty-sec">セクションがありません。「編集」から追加してください。</div>`}</section>
+      ${barsHTML(sec.bars,offset,key,showRoman,diagFor(sec))}</div>`).join("")||`<div class="empty-sec">セクションがありません。「編集」から追加してください。</div>`}</section>
     ${s.memo?`<section class="memo"><h2>メモ</h2><p>${esc(s.memo)}</p></section>`:""}
     <div id="copyArea"></div></div>`;
   bindToolbar();
@@ -812,7 +813,7 @@ function bindEditor(){
   secs.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b)return;const i=Number(b.closest(".esec").dataset.i);const S=draft.sections;
     if(b.dataset.act==="up"&&i>0)[S[i-1],S[i]]=[S[i],S[i-1]];
     if(b.dataset.act==="down"&&i<S.length-1)[S[i+1],S[i]]=[S[i],S[i+1]];
-    if(b.dataset.act==="dup")S.splice(i+1,0,{name:S[i].name+"（2）",bars:S[i].bars});
+    if(b.dataset.act==="dup")S.splice(i+1,0,Object.assign(JSON.parse(JSON.stringify(S[i])),{name:S[i].name+"（2）"}));
     if(b.dataset.act==="del")S.splice(i,1);
     markDirty();rerenderSecs();});
   $("addSec").onclick=()=>{draft.sections.push({name:"セクション"+(draft.sections.length+1),bars:""});markDirty();rerenderSecs();
@@ -991,12 +992,13 @@ function pickChordAtCaret(ta,open){
   if(open)palShown=true;
   if(!palShown)return;
   setTarget(i);
-  loadPadFrom(t.tok);
+  loadPadFrom(t.tok,i);
   renderPalette();
 }
-function loadPadFrom(name){
-  const v=draft.voicings&&draft.voicings[name];
-  const sh=v&&Array.isArray(v.frets)?v:effectiveShape(draft.voicings,name);
+function loadPadFrom(name,si){
+  const sec=draft.sections[si!=null?si:lastFocusSec];
+  const sv=sec&&sec.voicings&&sec.voicings[name],v=draft.voicings&&draft.voicings[name];
+  const sh=sv&&Array.isArray(sv.frets)?sv:v&&Array.isArray(v.frets)?v:effectiveShape(draft.voicings,name);
   if(sh){padDraft={frets:sh.frets.slice(),fingers:(sh.fingers||[]).map(x=>Math.max(0,FINGERS.indexOf(String(x||"")))).concat([0,0,0,0,0,0]).slice(0,6),barreOn:!!sh.barre};}
   else padDraft={frets:[-1,-1,-1,-1,-1,-1],fingers:[0,0,0,0,0,0],barreOn:false};
   padName=name;
@@ -1023,7 +1025,7 @@ function replaceTarget(name,voicing){
   const ta=$("secBars"+t.sec);if(!ta)return false;
   let cur=ta.value.slice(t.start,t.end)===t.tok?t:tokenAt(ta.value,t.start);
   if(!cur||cur.tok!==t.tok){editTarget=null;renderPadTarget();toast("選んでいたコードが見つかりません。もう一度タップしてください",false);return false;}
-  if(voicing)draft.voicings=Object.assign({},draft.voicings||{},{[name]:voicing});
+  if(voicing)setSectionVoicing(t.sec,name,voicing);
   ta.value=ta.value.slice(0,cur.start)+name+ta.value.slice(cur.end);
   const end=cur.start+name.length;try{ta.setSelectionRange(end,end);}catch(e){}
   touchedSecs.add(t.sec);
@@ -1031,7 +1033,7 @@ function replaceTarget(name,voicing){
   const old=t.tok;
   editTarget=isChordTok(name)?{sec:t.sec,start:cur.start,end,tok:name}:null;
   toast(old===name?`${name} の押さえ方を変えました`:`${old} → ${name} に変えました`,true);
-  if(editTarget&&!voicing)loadPadFrom(name);
+  if(editTarget&&!voicing)loadPadFrom(name,t.sec);
   if(!editTarget)resetPad();
   renderPalette();
   const pv=$("pv"+t.sec);if(pv){pv.classList.remove("flash");void pv.offsetWidth;pv.classList.add("flash");}
@@ -1042,7 +1044,7 @@ function padCommit(){
   const voicing={frets:d.frets.slice(),fingers:d.fingers.map(x=>FINGERS[x]||""),barre:d.barreOn?computeBarre(d.frets):null};
   if(editTarget){if(replaceTarget(n,voicing))btnDone($("pInsert"),"✓ 置き換えました");return;}
   // remember this exact fingering for the song so the chart shows it
-  draft.voicings=Object.assign({},draft.voicings||{},{[n]:voicing});
+  setSectionVoicing(Math.min(lastFocusSec,draft.sections.length-1),n,voicing);
   insertChord(n);
   padNote(`「${draft.sections[lastFocusSec].name}」に ${n} を入力しました`,true);btnDone($("pInsert"),"✓ 入力しました");
 }
@@ -1214,15 +1216,25 @@ function voicingsFor(name){
     return {frets:v.frets,fingers:[],barre:fretted.length>4?computeBarre(v.frets):null,pos:v.pos};});
   return vcache[name]=out;
 }
-/* the shape a chart shows: this song's choice, then My Chords, then the standard shape */
-function effectiveShape(voicings,c){
+/* the shape a chart shows: this section's choice, this song's choice, then My Chords, then the standard shape */
+function effectiveShape(voicings,c,secVoicings){
+  const sv=secVoicings&&secVoicings[c];
+  if(sv&&Array.isArray(sv.frets))return toDiagram(sv);
   const v=voicings&&voicings[c];
   if(v&&Array.isArray(v.frets))return toDiagram(v);
   const mine=shapes.find(x=>x.name===c);if(mine)return toDiagram(mine);
   const std=shapeFor(c);if(std&&!std.approx)return std;
   const g=voicingsFor(c)[0];return g?toDiagram(g):std;
 }
-let vOpen=null,vlTimer=null;
+/* set a chord's shape in one section; the first shape chosen for a chord also becomes the song's default */
+function sameShape(a,b){return !!a&&!!b&&a.frets.join(",")===b.frets.join(",");}
+function clearSectionVoicings(c){draft.sections.forEach(x=>{if(x.voicings&&x.voicings[c]){const v=Object.assign({},x.voicings);delete v[c];x.voicings=v;}});}
+function setSectionVoicing(si,name,v){
+  const sec=draft.sections[si];if(!sec)return;
+  sec.voicings=Object.assign({},sec.voicings||{},{[name]:v});
+  if(!(draft.voicings&&draft.voicings[name]))draft.voicings=Object.assign({},draft.voicings||{},{[name]:v});
+}
+let vOpen=null,vlTimer=null,vScope="all";
 function songChords(d){
   const out=[];
   (d.sections||[]).forEach(sec=>parseBars(sec.bars).forEach(b=>b.forEach(c=>{if(c!=="%"&&c!=="/"&&CHORD_RE.test(c)&&!out.includes(c))out.push(c);})));
@@ -1233,30 +1245,43 @@ function renderVoicingList(){
   const list=songChords(draft);
   if(vOpen&&!list.includes(vOpen))vOpen=null;
   el.innerHTML=list.length?list.map(c=>{const sh=effectiveShape(draft.voicings,c);const chosen=!!(draft.voicings&&draft.voicings[c]);
-    return `<button class="vitem${c===vOpen?" on":""}" data-vc="${esc(c)}" aria-expanded="${c===vOpen}"><span class="nm">${esc(c)}</span>${sh?diagramSVG(sh,0.62):`<span class="none">形なし</span>`}<span class="vs">${chosen?"選択済み":"標準"}</span></button>`;}).join("")
+    const perSec=draft.sections.some(x=>x.voicings&&x.voicings[c]&&!sameShape(x.voicings[c],draft.voicings&&draft.voicings[c]));
+    return `<button class="vitem${c===vOpen?" on":""}" data-vc="${esc(c)}" aria-expanded="${c===vOpen}"><span class="nm">${esc(c)}</span>${sh?diagramSVG(sh,0.62):`<span class="none">形なし</span>`}<span class="vs">${perSec?"セクション別あり":chosen?"選択済み":"標準"}</span></button>`;}).join("")
     :`<p class="note">まだコードが入っていません。</p>`;
-  el.onclick=e=>{const b=e.target.closest("[data-vc]");if(!b)return;vOpen=vOpen===b.dataset.vc?null:b.dataset.vc;renderVoicingList();};
+  el.onclick=e=>{const b=e.target.closest("[data-vc]");if(!b)return;vOpen=vOpen===b.dataset.vc?null:b.dataset.vc;vScope="all";renderVoicingList();};
   renderVoicePicker();
 }
 function renderVoicePicker(){
   const el=$("vpick");if(!el)return;
   if(!vOpen){el.innerHTML="";return;}
   const c=vOpen;
-  const cur=effectiveShape(draft.voicings,c);const curKey=cur?cur.frets.join(","):"";
+  const secIdx=draft.sections.map((x,i)=>i).filter(i=>parseBars(draft.sections[i].bars).some(b=>b.includes(c)));
+  if(vScope!=="all"&&!secIdx.includes(Number(vScope)))vScope="all";
+  const scSec=vScope==="all"?null:draft.sections[Number(vScope)];
+  const cur=effectiveShape(draft.voicings,c,scSec&&scSec.voicings);const curKey=cur?cur.frets.join(","):"";
+  const hasOwn=scSec?!!(scSec.voicings&&scSec.voicings[c]):!!(draft.voicings&&draft.voicings[c])||draft.sections.some(x=>x.voicings&&x.voicings[c]);
   const opts=[];const seen=new Set();
   const add=(label,obj)=>{if(!obj)return;const k=obj.frets.join(",");if(seen.has(k))return;seen.add(k);opts.push({label,obj});};
   const std=shapeFor(c);if(std&&!std.approx)add("標準",{frets:std.frets,fingers:[],barre:std.barre?{fret:std.barre,from:std.bFrom,to:std.bTo}:null});
   shapes.filter(x=>x.name===c).forEach(x=>add("マイコード",x));
   voicingsFor(c).forEach(v=>add(v.pos===0?"開放":`${v.pos}フレット`,v));
   if(draft.voicings&&draft.voicings[c])add("入力した形",draft.voicings[c]);
+  draft.sections.forEach(x=>{if(x.voicings&&x.voicings[c])add(`「${x.name}」の形`,x.voicings[c]);});
   el.innerHTML=`<div class="vpick"><div class="vhead"><b>${esc(c)}</b> の形 <span class="note">${opts.length}通り・タップで選択（音も鳴ります）</span>
-      ${draft.voicings&&draft.voicings[c]?`<button class="btn small" id="vReset">標準に戻す</button>`:""}</div>
+      ${secIdx.length>1||vScope!=="all"?`<label class="vscope">使う場所 <select id="vScope"><option value="all"${vScope==="all"?" selected":""}>曲全体</option>${secIdx.map(i=>`<option value="${i}"${String(i)===String(vScope)?" selected":""}>${esc((LETTERS[i]||"•")+" "+draft.sections[i].name)}だけ</option>`).join("")}</select></label>`:""}
+      ${hasOwn?`<button class="btn small" id="vReset">${scSec?"曲全体の形に戻す":"標準に戻す"}</button>`:""}</div>
     ${opts.length?`<div class="vgrid">${opts.map((o,k)=>`<button class="vopt${o.obj.frets.join(",")===curKey?" on":""}" data-vk="${k}"><span class="vl">${esc(o.label)}</span>${diagramSVG(toDiagram(o.obj),0.85)}<span class="code">${esc(fretCode(o.obj.frets))}</span></button>`).join("")}</div>`
       :`<p class="note">このコード名から形を見つけられませんでした。「＋ コードを入力」から指板で入力できます。</p>`}</div>`;
+  const vs=$("vScope");if(vs)vs.onchange=()=>{vScope=vs.value;renderVoicePicker();};
   el.querySelectorAll("[data-vk]").forEach(b=>b.onclick=()=>{const o=opts[Number(b.dataset.vk)].obj;
-    draft.voicings=Object.assign({},draft.voicings||{},{[c]:{frets:o.frets.slice(),fingers:(o.fingers||[]).slice(),barre:o.barre||null}});
-    strum(o.frets);markDirty();renderVoicingList();toast(`${c} の形を選びました`,true);});
-  const r=$("vReset");if(r)r.onclick=()=>{const v=Object.assign({},draft.voicings);delete v[c];draft.voicings=v;markDirty();renderVoicingList();toast(`${c} を標準の形に戻しました`,true);};
+    const v={frets:o.frets.slice(),fingers:(o.fingers||[]).slice(),barre:o.barre||null};
+    if(scSec){scSec.voicings=Object.assign({},scSec.voicings||{},{[c]:v});toast(`「${scSec.name}」の ${c} の形を選びました`,true);}
+    else{draft.voicings=Object.assign({},draft.voicings||{},{[c]:v});clearSectionVoicings(c);toast(`曲全体の ${c} の形を選びました`,true);}
+    strum(o.frets);markDirty();renderVoicingList();});
+  const r=$("vReset");if(r)r.onclick=()=>{
+    if(scSec){const v=Object.assign({},scSec.voicings);delete v[c];scSec.voicings=v;toast(`「${scSec.name}」の ${c} を曲全体の形に戻しました`,true);}
+    else{const v=Object.assign({},draft.voicings);delete v[c];draft.voicings=v;clearSectionVoicings(c);toast(`${c} を標準の形に戻しました`,true);}
+    markDirty();renderVoicingList();};
 }
 let audioCtx=null;
 function strum(frets){
@@ -1471,8 +1496,8 @@ async function renderPdfPages(s){
   const dF=(0.5+0.4*heightK)/0.7;
   const pRoman=showRoman&&!isCompact(),pDiag=showDiag&&!isCompact();
   const nameH=46,romH=pRoman?26:0,diagH=pDiag?Math.round(96*1.25*dF):0,rowH=nameH+romH+diagH+Math.round(10+32*heightK);
-  const cache={};const shapeOf=(c)=>c in cache?cache[c]:(cache[c]=effectiveShape(offset?null:s.voicings,c));
   (s.sections||[]).forEach((sec,si)=>{
+    const cache={};const shapeOf=(c)=>c in cache?cache[c]:(cache[c]=effectiveShape(offset?null:s.voicings,c,offset?null:sec.voicings));
     const lines=parseLines(sec.bars);
     const rows=[];lines.forEach((bars,li)=>{for(let i=0;i<bars.length;i+=4)rows.push({bars:bars.slice(i,i+4),last:li===lines.length-1&&i+4>=bars.length});});
     if(!rows.length)rows.push({bars:[],last:true});
